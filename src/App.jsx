@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction, collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
-// 🛑 關鍵修復：確保 User 圖示被重新命名為 UserIcon，避免與 user 資料變數衝突
-import { MapPin, Calendar, Users, PlusCircle, LayoutList, CheckCircle, ChevronLeft, Loader2, Megaphone, Settings, ListChecks, Shuffle, TrendingUp, XCircle, DollarSign, ExternalLink, CreditCard, Grid, Play, SkipForward, Hash, Globe, BellRing, Search, Star, Heart, Trophy, AlertCircle, Trash2, Sparkles, Flag, Crown, Swords, Timer, ClipboardList, User as UserIcon, LogOut, Mail, Lock, KeyRound, Copy, Bell, Zap, Dices, Edit, Save, Image as ImageIcon, Printer, FileText, X, Plus } from 'lucide-react';
+// ✅ 關鍵修復：將 User 圖示改名為 UserIcon，避免與使用者變數 user 衝突導致白畫面
+import { MapPin, Calendar, Users, PlusCircle, LayoutList, CheckCircle, ChevronLeft, Loader2, Megaphone, Settings, ListChecks, Shuffle, TrendingUp, XCircle, DollarSign, ExternalLink, CreditCard, Grid, Play, SkipForward, Hash, Globe, BellRing, Search, Star, Heart, Trophy, AlertCircle, Trash2, Sparkles, Flag, Crown, Swords, Timer, ClipboardList, User as UserIcon, LogOut, Mail, Lock, KeyRound, Copy, Bell, Zap, Dices, Edit, Save, Image as ImageIcon, Printer, FileText, X, Plus, AlertTriangle } from 'lucide-react';
 
 // --- 請修改這裡 (填入您的 Firebase 資料) ---
 const appId = 'dance-event-demo-01'; 
@@ -21,11 +21,14 @@ const firebaseConfig = {
 // --- 初始化 Firebase ---
 let app, auth, db;
 try {
+  // 增加防呆檢查
   if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("請填入")) {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
     setPersistence(auth, browserLocalPersistence).catch(console.error);
+  } else {
+    console.warn("Firebase Config 尚未填寫！部分功能將無法使用。");
   }
 } catch (e) {
   console.error("Firebase Init Failed:", e);
@@ -260,7 +263,7 @@ const App = () => {
     const [events, setEvents] = useState([]);
     const [myRegistrations, setMyRegistrations] = useState([]);
 
-    const t = (key) => translations[lang]?.[key] || translations['zh-TW'][key] || key;
+    const t = (key) => translations[lang]?.[key] || translations['zh-TW'][key] || translations['en'][key] || key;
 
     // --- Firebase 狀態監聽 ---
     useEffect(() => {
@@ -289,6 +292,7 @@ const App = () => {
 
     const handleAuth = async (e) => {
         e.preventDefault();
+        if (!auth) { alert("Firebase 未連線"); return; }
         setSystemMessage("Processing...");
         try {
             if (isRegisteringMode) {
@@ -306,6 +310,7 @@ const App = () => {
     };
 
     const handleLogout = async () => {
+        if (!auth) return;
         try {
             await signOut(auth);
             setUser(null);
@@ -317,6 +322,7 @@ const App = () => {
         }
     };
 
+    // --- 資料獲取 ---
     const fetchEvents = useCallback(async () => {
         if (!isAuthReady || !db) return;
         try {
@@ -387,7 +393,17 @@ const App = () => {
             <div className="p-4 space-y-6 pb-24">
                 <div className="flex justify-between items-center px-1">
                     <h2 className="text-xl font-bold text-white">{t('allEvents')}</h2>
-                    <button onClick={handleLogout} className="text-xs text-gray-500 hover:text-red-400 flex items-center"><LogOut size={12} className="mr-1"/> {t('logout')}</button>
+                    <div className="flex gap-2 items-center">
+                        <div className="flex items-center gap-2 bg-gray-800 rounded-full px-2 py-1 border border-gray-700">
+                            <Globe size={12} className="text-gray-400"/>
+                            <select value={lang} onChange={(e) => setLang(e.target.value)} className="bg-transparent text-[10px] text-gray-300 focus:outline-none cursor-pointer">
+                                <option value="en">EN</option>
+                                <option value="zh-TW">繁體</option>
+                                <option value="zh-CN">简中</option>
+                            </select>
+                        </div>
+                        <button onClick={handleLogout} className="text-xs text-gray-500 hover:text-red-400 flex items-center"><LogOut size={12} className="mr-1"/> {t('logout')}</button>
+                    </div>
                 </div>
                 {featuredEvent && (
                     <div onClick={() => navigate('detail', featuredEvent)} className="relative w-full h-48 bg-gray-800 rounded-3xl overflow-hidden cursor-pointer border border-gray-700 group">
@@ -411,8 +427,9 @@ const App = () => {
                                 <div className="flex justify-between items-start">
                                     <h3 className="text-lg font-semibold text-white line-clamp-1">{event.name}</h3>
                                     <div className="flex gap-1">
-                                        {event.initialFormat === '7tosmoke' && <span className="text-[10px] bg-purple-900 text-purple-300 px-1.5 py-0.5 rounded border border-purple-700">7 to Smoke</span>}
-                                        {event.initialFormat === 'tournament' && <span className="text-[10px] bg-blue-900 text-blue-300 px-1.5 py-0.5 rounded border border-blue-700">Tournament</span>}
+                                        {event.categories && event.categories.map(c => (
+                                            <span key={c} className="text-[10px] bg-indigo-900 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-700">{c}</span>
+                                        ))}
                                     </div>
                                 </div>
                                 <div className="flex items-center text-sm text-gray-400 mt-2"><Calendar size={14} className="mr-1.5 text-red-400"/>{formatDateOnly(event.date)}</div>
@@ -426,7 +443,7 @@ const App = () => {
 
     // 2. 活動詳情
     const EventDetail = ({ event }) => {
-        if (!event) return <div className="p-8 text-center text-white"><Loader2 className="animate-spin mx-auto mb-2"/> Loading...</div>;
+        if (!event) return <div className="p-8 text-center text-white"><Loader2 className="animate-spin mx-auto mb-2"/> Loading event data...</div>;
 
         const [isRegistering, setIsRegistering] = useState(false);
         const [showCallAlert, setShowCallAlert] = useState(false); 
@@ -450,7 +467,10 @@ const App = () => {
         }, [registration?.called]);
 
         const handleRegistration = async () => {
-            if (!db || !user || isRegistering) return;
+            if (!db || !user || isRegistering) {
+                if (!db) alert("資料庫未連線！");
+                return;
+            }
             if (!stageName.trim()) { setSystemMessage("請填寫舞台名稱 (Stage Name)"); return; }
 
             setIsRegistering(true);
@@ -628,21 +648,18 @@ const App = () => {
         const [isSubmitting, setIsSubmitting] = useState(false);
 
         const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.type === 'number' ? parseInt(e.target.value) || 0 : e.target.value });
-        
-        const addCategory = () => {
-            if(catInput.trim()) {
-                setCategories([...categories, catInput.trim()]);
-                setCatInput('');
-            }
-        };
-
-        const removeCategory = (index) => {
-            setCategories(categories.filter((_, i) => i !== index));
-        };
+        const handleLaneLetterChange = (e) => { const letter = e.target.value; const count = letter.charCodeAt(0) - 64; setFormData({ ...formData, laneCount: count }); };
+        const addRoundConfig = () => { setRounds([...rounds, { round: rounds.length + 2, qualifiers: 32 }]); };
+        const updateRoundConfig = (index, key, value) => { const newRounds = [...rounds]; newRounds[index][key] = parseInt(value) || 0; setRounds(newRounds); };
+        const removeRoundConfig = (index) => { setRounds(rounds.filter((_, i) => i !== index)); };
+        const alphabetOptions = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i));
 
         const handleSubmit = async (e) => {
             e.preventDefault();
-            if (!db || !user || isSubmitting) return;
+            if (!db || !user || isSubmitting) {
+                 if (!db) alert("DB Error");
+                 return;
+            }
             setIsSubmitting(true);
             try {
                 await addDoc(collection(db, `artifacts/${appId}/public/data/events`), { 
@@ -656,6 +673,18 @@ const App = () => {
                 setSystemMessage(`${t('createFail')}: ${error.message}`); setIsSubmitting(false);
             }
         };
+        
+        const addCategory = () => {
+            if(catInput.trim()) {
+                setCategories([...categories, catInput.trim()]);
+                setCatInput('');
+            }
+        };
+
+        const removeCategory = (index) => {
+            setCategories(categories.filter((_, i) => i !== index));
+        };
+
         return (
             <div className="p-4 pb-24 space-y-4">
                 <button onClick={() => navigate('browse')} className="flex items-center text-gray-400 hover:text-white transition"><ChevronLeft size={24}/> {t('backToHome')}</button>
@@ -673,11 +702,11 @@ const App = () => {
                     <div className="bg-gray-800 p-5 rounded-3xl border border-gray-700 shadow-lg space-y-4">
                         <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">{t('compSettingsTitle')}</h3>
                         <div className="grid grid-cols-2 gap-4">
-                            <div><label className="block text-gray-500 text-xs mb-2">{t('laneCountPh')}</label><select value={getLaneName(formData.laneCount - 1)} onChange={(e)=>{const c = e.target.value.charCodeAt(0)-64; setFormData({...formData, laneCount: c})}} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none">{Array.from({length:26},(_,i)=>String.fromCharCode(65+i)).map((l,i)=><option key={l} value={l}>{l} ({i+1} Lanes)</option>)}</select></div>
+                            <div><label className="block text-gray-500 text-xs mb-2">{t('laneCountPh')}</label><select value={getLaneName(formData.laneCount - 1)} onChange={handleLaneLetterChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition appearance-none">{alphabetOptions.map((letter, idx) => (<option key={letter} value={letter}>{letter} ({idx + 1} Lane{idx > 0 ? 's' : ''})</option>))}</select></div>
                             <div><label className="block text-gray-500 text-xs mb-2">{t('laneCapacityPh')}</label><input type="number" name="laneCapacity" placeholder="50" value={formData.laneCapacity} onChange={handleChange} min="1" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/></div>
                         </div>
                         
-                        {/* 🆕 Tag Input System */}
+                        {/* Tag Input System */}
                         <div>
                             <label className="block text-gray-500 text-xs mb-2">{t('categoriesLabel')}</label>
                             <div className="flex gap-2 mb-2">
@@ -741,6 +770,7 @@ const App = () => {
         );
     };
 
+    // 5. Management List
     const ManagementList = () => {
         const myHostedEvents = events.filter(e => e.creatorId === user.uid);
         return (
@@ -798,14 +828,12 @@ const App = () => {
 
     // 7. Event Manager (後台) - 新增 Categories 切換與列印
     const EventManager = ({ event }) => {
-        // 🛑 安全檢查：確保有 event 資料
         if (!event) return <div className="p-8 text-center">Loading...</div>;
 
         const [activeTab, setActiveTab] = useState('checkin'); 
         const [allRegistrations, setAllRegistrations] = useState([]);
         const [callStatus, setCallStatus] = useState({ displayNumbers: [] });
         const [isProcessing, setIsProcessing] = useState(false);
-        // 預設選擇第一個類別，若無則為 Standard
         const [currentCategory, setCurrentCategory] = useState(event.categories?.[0] || 'Standard');
         const [isPrintMode, setIsPrintMode] = useState(false);
         
@@ -907,7 +935,7 @@ const App = () => {
                 <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
                     <label className="text-xs text-gray-400 block mb-1">{t('category')}</label>
                     <select value={currentCategory} onChange={e => setCurrentCategory(e.target.value)} className="w-full p-2 bg-gray-900 text-white rounded border border-gray-600">
-                        {event.categories && event.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                        {event.categories.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                 </div>
 
@@ -966,7 +994,7 @@ const App = () => {
     const BottomNav = () => (
         <div className="fixed bottom-0 left-0 right-0 bg-gray-900/90 backdrop-blur-md border-t border-gray-800 flex justify-around items-center p-2 pb-safe z-50 md:max-w-md md:mx-auto md:rounded-t-2xl">
             {[{n:t('navHome'),i:Grid,p:'browse'}, {n:t('navCreate'),i:PlusCircle,p:'create'}, {n:t('navMy'),i:UserIcon,p:'my_events'}, {n:t('navManage'),i:ClipboardList,p:'manage_list'}].map(i=>(
-                <button key={i.p} onClick={()=>navigate(i.p)} className={`flex flex-col items-center justify-center p-2 w-full transition active:scale-90 ${currentPage===i.p || (currentPage==='detail' && i.p==='browse') || (currentPage==='registerSuccess' && i.p==='browse') ?'text-red-500':'text-gray-500 hover:text-gray-300'}`}><i.i size={26} strokeWidth={currentPage===i.p ? 2.5 : 2}/><span className="text-[10px] mt-1 font-medium">{i.n}</span></button>
+                <button key={i.p} onClick={()=>navigate(i.p)} className={`flex flex-col items-center justify-center p-2 w-full transition active:scale-90 ${currentPage===i.p || (currentPage==='detail' && i.p==='browse') ?'text-red-500':'text-gray-500 hover:text-gray-300'}`}><i.i size={26} strokeWidth={currentPage===i.p ? 2.5 : 2}/><span className="text-[10px] mt-1 font-medium">{i.n}</span></button>
             ))}
         </div>
     );
@@ -974,7 +1002,7 @@ const App = () => {
     return (
         <div className="min-h-screen bg-black flex flex-col items-center text-sans">
             <div id="app" className="w-full max-w-md min-h-screen flex flex-col bg-gray-900 text-white shadow-2xl relative">
-                <header className="bg-gray-900/90 backdrop-blur-md text-white p-4 flex justify-between items-center sticky top-0 z-40 border-b border-gray-800"><h1 className="text-xl font-black tracking-tight flex items-center"><span className="text-red-600 mr-1 text-2xl">⚡</span> {t('appTitle')}</h1></header>
+                <header className="bg-gray-900/90 backdrop-blur-md text-white p-4 flex justify-between items-center sticky top-0 z-40 border-b border-gray-800"><h1 className="text-xl font-black tracking-tight flex items-center"><span className="text-red-600 mr-1 text-2xl">⚡</span> {t('appTitle')}</h1><div className="flex items-center gap-2 bg-gray-800 rounded-full px-3 py-1.5 border border-gray-700"><Globe size={14} className="text-gray-400"/><select value={lang} onChange={(e) => setLang(e.target.value)} className="bg-transparent text-xs text-gray-300 focus:outline-none cursor-pointer font-medium"><option value="zh-TW">繁體</option><option value="zh-CN">简中</option><option value="en">EN</option><option value="ja">JP</option><option value="ko">KR</option></select></div></header>
                 <main className="flex-grow overflow-y-auto overflow-x-hidden relative">{renderPage()}</main>
                 <BottomNav />
             </div>
