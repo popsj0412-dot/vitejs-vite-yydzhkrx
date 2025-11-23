@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction, collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { MapPin, Calendar, Users, PlusCircle, LayoutList, CheckCircle, ChevronLeft, Loader2, Megaphone, Settings, ListChecks, Shuffle, TrendingUp, XCircle, DollarSign, ExternalLink, CreditCard, Grid, Play, SkipForward, Hash, Globe, BellRing, Search, Star, Heart, Trophy, AlertCircle, Trash2, Sparkles, Flag, Crown, Swords, Timer, ClipboardList, User, LogOut, Mail, Lock, KeyRound, Copy, Bell, Zap } from 'lucide-react';
+// ✅ 修正 1: 將 User 圖示改名為 UserIcon，避免跟使用者變數 user 衝突
+import { MapPin, Calendar, Users, PlusCircle, LayoutList, CheckCircle, ChevronLeft, Loader2, Megaphone, Settings, ListChecks, Shuffle, TrendingUp, XCircle, DollarSign, ExternalLink, CreditCard, Grid, Play, SkipForward, Hash, Globe, BellRing, Search, Star, Heart, Trophy, AlertCircle, Trash2, Sparkles, Flag, Crown, Swords, Timer, ClipboardList, User as UserIcon, LogOut, Mail, Lock, KeyRound, Copy, Bell, Zap } from 'lucide-react';
 
 // --- 請修改這裡 (填入您的 Firebase 資料) ---
 const appId = 'dance-event-demo-01'; 
@@ -78,7 +79,7 @@ const translations = {
         formatTournament: "Tournament (1 on 1)",
         compSettingsTitle: "賽事與賽道規格",
         laneCountPh: "賽道數量 (選擇最後賽道字母)",
-        laneCapacityPh: "每賽道人數 / 號碼上限 (1~N)",
+        laneCapacityPh: "每賽道人數 / 号码上限 (1~N)",
         laneHint: "總賽道: A ~ {lastChar} | 總名額: {total} 人",
         paymentSettingsTitle: "繳費設定",
         paymentDescPh: "繳費說明...",
@@ -168,7 +169,6 @@ const translations = {
         tournReq: "需偶數人 (2, 4, 8, 16...)",
         resetMode: "重置為標準叫號",
         modeActive: "進行中",
-        // 管理密碼相關
         adminCodeLabel: "主辦人管理密碼",
         adminCodeHint: "請記住此密碼！",
         claimAdminBtn: "我是主辦人",
@@ -177,7 +177,6 @@ const translations = {
         adminAccessGranted: "✅ 管理權限已解鎖！",
         copy: "複製",
         copied: "已複製",
-        // 新增通知相關
         enableNotify: "開啟通知",
         notifyEnabled: "通知已開啟",
         notifyHint: "請允許通知權限以便接收叫號",
@@ -397,11 +396,20 @@ const App = () => {
             setDb(firestoreDb);
             setAuth(firebaseAuth);
             
-            const unsubscribe = onAuthStateChanged(firebaseAuth, (currentUser) => {
-                setUser(currentUser);
+            const unsubscribe = onAuthStateChanged(firebaseAuth, async (currentUser) => {
+                // 🔥 關鍵修改：如果偵測到是「匿名 (Anonymous)」用戶，強制登出！
+                if (currentUser && currentUser.isAnonymous) {
+                    console.log("偵測到舊的匿名帳號，正在清除...");
+                    await signOut(firebaseAuth);
+                    setUser(null); // 清空使用者狀態，強制顯示登入頁面
+                } else {
+                    setUser(currentUser);
+                }
+
                 setIsAuthReady(true);
                 setLoading(false);
-                if (currentUser) {
+                
+                if (currentUser && !currentUser.isAnonymous) {
                     setAuthEmail('');
                     setAuthPassword('');
                 }
@@ -858,7 +866,69 @@ const App = () => {
         );
     };
 
-    // 7. Event Manager (後台) - 完整版
+    // 4. My Events
+    const MyEvents = () => {
+        const myJoinedEvents = events.filter(e => myRegistrations.some(r => r.eventId === e.id));
+        return (
+             <div className="p-4 space-y-4 pb-24">
+                <h2 className="text-2xl font-bold text-white mb-4">{t('myEventsTitle')}</h2>
+                {myJoinedEvents.length === 0 ? (
+                    <div className="text-center text-gray-500 py-12 border border-dashed border-gray-700 rounded-xl">{t('noJoinedEvents')}</div>
+                ) : (
+                    <div className="space-y-3">
+                        {myJoinedEvents.map(event => {
+                             const reg = myRegistrations.find(r => r.eventId === event.id);
+                             if (!reg) return null;
+                             return (
+                                <div key={event.id} onClick={() => navigate('detail', event)} className="bg-gray-800 p-4 rounded-2xl border border-gray-700 cursor-pointer active:bg-gray-700 transition">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h3 className="font-bold text-white text-lg">{event.name}</h3>
+                                        <span className="text-xs bg-green-900 text-green-300 px-2 py-1 rounded">{t('registered')}</span>
+                                    </div>
+                                    <p className="text-sm text-gray-400 flex items-center mb-3"><Calendar size={14} className="mr-2"/> {formatDateTime(event.date)}</p>
+                                    <div className="flex items-center justify-between bg-gray-900/50 p-2 rounded-lg">
+                                        <span className="text-xs text-gray-500">{t('yourNumber')}</span>
+                                        <span className="text-xl font-black text-indigo-400">{reg.laneAssignment}-{formatNumber(reg.queueNumber)}</span>
+                                    </div>
+                                </div>
+                             );
+                        })}
+                    </div>
+                )}
+             </div>
+        );
+    };
+
+    // 5. Management List
+    const ManagementList = () => {
+        const myHostedEvents = events.filter(e => e.creatorId === user.uid);
+        return (
+             <div className="p-4 space-y-4 pb-24">
+                <h2 className="text-2xl font-bold text-white mb-4">{t('manageListTitle')}</h2>
+                {myHostedEvents.length === 0 ? (
+                    <div className="text-center text-gray-500 py-12 border border-dashed border-gray-700 rounded-xl">{t('noHostedEvents')}</div>
+                ) : (
+                    <div className="space-y-3">
+                        {myHostedEvents.map(event => (
+                            <div key={event.id} className="bg-gray-800 p-4 rounded-2xl border-l-4 border-indigo-500 shadow-lg">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div>
+                                        <h3 className="font-bold text-white text-lg">{event.name}</h3>
+                                        <p className="text-sm text-gray-400 mt-1">{formatDateTime(event.date)}</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => navigate('manage', event)} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-xl text-sm font-bold flex items-center justify-center transition">
+                                    <Settings size={16} className="mr-2"/> {t('enterManage')}
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+             </div>
+        );
+    };
+
+    // 7. Event Manager (後台) ... (保持完整功能)
     const EventManager = ({ event }) => {
         const [activeTab, setActiveTab] = useState('calling');
         const [allRegistrations, setAllRegistrations] = useState([]);
@@ -964,7 +1034,7 @@ const App = () => {
             await updateDoc(EVENT_DOC_REF, { tournamentState: { matches: newMatches } });
         };
 
-        // Sub-components
+        // Sub-components (defined inside EventManager to access state)
         const CallingStatusTab = () => {
             const displayNums = callStatus.displayNumbers;
             return (
@@ -1098,7 +1168,7 @@ const App = () => {
 
     const BottomNav = () => (
         <div className="fixed bottom-0 left-0 right-0 bg-gray-900/90 backdrop-blur-md border-t border-gray-800 flex justify-around items-center p-2 pb-safe z-50 md:max-w-md md:mx-auto md:rounded-t-2xl">
-            {[{n:t('navHome'),i:Grid,p:'browse'}, {n:t('navCreate'),i:PlusCircle,p:'create'}, {n:t('navMy'),i:User,p:'my_events'}, {n:t('navManage'),i:ClipboardList,p:'manage_list'}].map(i=>(
+            {[{n:t('navHome'),i:Grid,p:'browse'}, {n:t('navCreate'),i:PlusCircle,p:'create'}, {n:t('navMy'),i:UserIcon,p:'my_events'}, {n:t('navManage'),i:ClipboardList,p:'manage_list'}].map(i=>(
                 <button key={i.p} onClick={()=>navigate(i.p)} className={`flex flex-col items-center justify-center p-2 w-full transition active:scale-90 ${currentPage===i.p || (currentPage==='detail' && i.p==='browse') || (currentPage==='registerSuccess' && i.p==='browse') ?'text-red-500':'text-gray-500 hover:text-gray-300'}`}><i.i size={26} strokeWidth={currentPage===i.p ? 2.5 : 2}/><span className="text-[10px] mt-1 font-medium">{i.n}</span></button>
             ))}
         </div>
@@ -1107,7 +1177,7 @@ const App = () => {
     return (
         <div className="min-h-screen bg-black flex flex-col items-center text-sans">
             <div id="app" className="w-full max-w-md min-h-screen flex flex-col bg-gray-900 text-white shadow-2xl relative">
-                <header className="bg-gray-900/90 backdrop-blur-md text-white p-4 flex justify-between items-center sticky top-0 z-40 border-b border-gray-800"><h1 className="text-xl font-black tracking-tight flex items-center"><span className="text-red-600 mr-1 text-2xl">⚡</span> {t('appTitle')}</h1><div className="flex items-center gap-2 bg-gray-800 rounded-full px-3 py-1.5 border border-gray-700"><Globe size={14} className="text-gray-400"/><select value={lang} onChange={(e) => setLang(e.target.value)} className="bg-transparent text-xs text-gray-300 focus:outline-none cursor-pointer font-medium"><option value="zh-TW">繁體</option><option value="zh-CN">简中</option><option value="en">EN</option><option value="ja">JP</option><option value="ko">KR</option></select></div></header>
+                <header className="bg-gray-900/90 backdrop-blur-md text-white p-4 flex justify-between items-center sticky top-0 z-40 border-b border-gray-800"><h1 className="text-xl font-black tracking-tight flex items-center"><span className="text-red-600 mr-1 text-2xl">⚡</span> {t('appTitle')}</h1></header>
                 <main className="flex-grow overflow-y-auto overflow-x-hidden relative">{renderPage()}</main>
                 <BottomNav />
             </div>
