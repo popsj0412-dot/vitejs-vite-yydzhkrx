@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction, collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
-import { MapPin, Calendar, Users, PlusCircle, LayoutList, CheckCircle, ChevronLeft, Loader2, Megaphone, Settings, ListChecks, Shuffle, TrendingUp, XCircle, DollarSign, ExternalLink, CreditCard, Grid, Play, SkipForward, Hash, Globe, BellRing, Search, Star, Heart, Trophy, AlertCircle, Trash2, Sparkles, Flag, Crown, Swords, Timer, ClipboardList, User as UserIcon, LogOut, Mail, Lock, KeyRound, Copy, Bell, Zap, Dices } from 'lucide-react';
+import { getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction, collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { MapPin, Calendar, Users, PlusCircle, LayoutList, CheckCircle, ChevronLeft, Loader2, Megaphone, Settings, ListChecks, Shuffle, TrendingUp, XCircle, DollarSign, ExternalLink, CreditCard, Grid, Play, SkipForward, Hash, Globe, BellRing, Search, Star, Heart, Trophy, AlertCircle, Trash2, Sparkles, Flag, Crown, Swords, Timer, ClipboardList, User as UserIcon, LogOut, Mail, Lock, KeyRound, Copy, Bell, Zap, Dices, Edit, Save, Image as ImageIcon, X } from 'lucide-react';
 
 // --- 請修改這裡 (填入您的 Firebase 資料) ---
 const appId = 'dance-event-demo-01'; 
@@ -83,6 +83,7 @@ const translations = {
         eventNamePh: "活動名稱",
         eventRegionPh: "地點/地區",
         mapLinkPh: "📍 地圖連結 (可選)",
+        bannerUrlPh: "🖼️ 活動封面圖片網址 (可選)",
         descPh: "活動描述...",
         eventFormatLabel: "主要賽制",
         formatStandard: "標準淘汰賽 (Standard)",
@@ -101,6 +102,15 @@ const translations = {
         roundLabel: "輪次",
         qualifiersLabel: "晉級人數",
         publishBtn: "發佈",
+        // 編輯與刪除
+        editEvent: "編輯活動",
+        deleteEvent: "刪除活動",
+        saveChanges: "儲存變更",
+        cancelEdit: "取消編輯",
+        deleteConfirm: "您確定要刪除此活動嗎？此操作無法復原！",
+        updateSuccess: "✅ 更新成功！",
+        deleteSuccess: "🗑️ 活動已刪除",
+        // 管理頁面
         tabCalling: "叫號",
         tabCheckIn: "報到",
         tabAssignment: "抽籤", 
@@ -183,14 +193,6 @@ const translations = {
         tournReq: "需偶數人 (2, 4, 8, 16...)",
         resetMode: "重置為標準叫號",
         modeActive: "進行中",
-        adminCodeLabel: "主辦人管理密碼",
-        adminCodeHint: "請記住此密碼！",
-        claimAdminBtn: "我是主辦人",
-        enterAdminCode: "輸入管理密碼",
-        wrongCode: "密碼錯誤",
-        adminAccessGranted: "✅ 管理權限已解鎖！",
-        copy: "複製",
-        copied: "已複製",
         enableNotify: "開啟通知",
         notifyEnabled: "通知已開啟",
         notifyHint: "請允許通知權限以便接收叫號",
@@ -246,6 +248,7 @@ const translations = {
         eventNamePh: "Name",
         eventRegionPh: "Location",
         mapLinkPh: "📍 Map Link",
+        bannerUrlPh: "🖼️ Banner URL (Optional)",
         descPh: "Description...",
         compSettingsTitle: "Track Config",
         laneCountPh: "Lanes (A, B...)",
@@ -347,18 +350,17 @@ const translations = {
         tournReq: "Need even number (2, 4...)",
         resetMode: "Reset to Standard",
         modeActive: "Active",
-        adminCodeLabel: "Admin Code",
-        adminCodeHint: "Remember this code!",
-        claimAdminBtn: "Organizer Login",
-        enterAdminCode: "Enter Code",
-        wrongCode: "Wrong Code",
-        adminAccessGranted: "✅ Access Granted!",
-        copy: "Copy",
-        copied: "Copied",
         enableNotify: "Enable Notify",
         notifyEnabled: "Notifications On",
         notifyHint: "Allow notifications to get alerts",
         wakelockActive: "Screen Kept On",
+        editEvent: "Edit Event",
+        deleteEvent: "Delete Event",
+        saveChanges: "Save Changes",
+        cancelEdit: "Cancel",
+        deleteConfirm: "Are you sure? This cannot be undone!",
+        updateSuccess: "✅ Updated!",
+        deleteSuccess: "🗑️ Event Deleted",
     }
 };
 
@@ -378,6 +380,8 @@ const getLaneName = (index) => String.fromCharCode(65 + index);
 // --- 主應用程式組件 ---
 
 const App = () => {
+    const [db, setDb] = useState(null);
+    const [auth, setAuth] = useState(null);
     const [user, setUser] = useState(null); 
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -393,7 +397,6 @@ const App = () => {
     
     const [events, setEvents] = useState([]);
     const [myRegistrations, setMyRegistrations] = useState([]);
-    const [adminAccess, setAdminAccess] = useState({});
 
     const t = (key) => translations[lang]?.[key] || translations['zh-TW'][key] || key;
 
@@ -464,6 +467,7 @@ const App = () => {
                 laneCount: doc.data().laneCount || 4,
                 laneCapacity: doc.data().laneCapacity || 50, 
                 googleMapLink: doc.data().googleMapLink || '',
+                bannerUrl: doc.data().bannerUrl || '',
                 paymentInfo: doc.data().paymentInfo || '',
                 paymentQrCodeUrl: doc.data().paymentQrCodeUrl || '',
                 initialFormat: doc.data().initialFormat || 'standard',
@@ -543,24 +547,32 @@ const App = () => {
                     </div>
                 </div>
                 {featuredEvent && (
-                    <div onClick={() => navigate('detail', featuredEvent)} className="relative w-full h-48 bg-gray-800 rounded-3xl overflow-hidden cursor-pointer border border-gray-700">
+                    <div onClick={() => navigate('detail', featuredEvent)} className="relative w-full h-48 bg-gray-800 rounded-3xl overflow-hidden cursor-pointer border border-gray-700 group">
+                       {featuredEvent.bannerUrl ? (
+                           <img src={featuredEvent.bannerUrl} alt="banner" className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 transition duration-500"/>
+                       ) : (
+                           <div className="absolute inset-0 bg-gradient-to-br from-purple-900 via-indigo-900 to-black opacity-90"></div>
+                       )}
                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent flex flex-col justify-end p-4">
                            <span className="bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded w-fit mb-2">HOT</span>
-                           <h3 className="text-2xl font-black text-white">{featuredEvent.name}</h3>
-                           <p className="text-gray-300 text-xs flex items-center"><MapPin size={12} className="mr-1"/>{featuredEvent.region}</p>
+                           <h3 className="text-2xl font-black text-white shadow-black drop-shadow-lg">{featuredEvent.name}</h3>
+                           <p className="text-gray-300 text-xs flex items-center shadow-black drop-shadow-md"><MapPin size={12} className="mr-1"/>{featuredEvent.region}</p>
                        </div>
                     </div>
                 )}
                 <div className="space-y-3">
                     {filteredEvents.length > 0 ? filteredEvents.map(event => (
-                        <div key={event.id} onClick={() => navigate('detail', event)} className="bg-gray-800 p-4 rounded-2xl shadow-md border border-gray-700/50 active:bg-gray-700 transition cursor-pointer flex flex-col gap-2">
-                            <div className="flex justify-between items-start">
-                                <h3 className="text-lg font-semibold text-white line-clamp-1">{event.name}</h3>
-                                <div className="flex gap-1">
-                                    {event.initialFormat === '7tosmoke' && <span className="text-[10px] bg-purple-900 text-purple-300 px-1.5 py-0.5 rounded border border-purple-700">7 to Smoke</span>}
+                        <div key={event.id} onClick={() => navigate('detail', event)} className="bg-gray-800 p-4 rounded-2xl shadow-md border border-gray-700/50 active:bg-gray-700 transition cursor-pointer flex gap-3 relative overflow-hidden">
+                            {event.bannerUrl && <div className="absolute inset-0 opacity-20"><img src={event.bannerUrl} className="w-full h-full object-cover" alt=""/></div>}
+                            <div className="relative z-10 flex-1">
+                                <div className="flex justify-between items-start">
+                                    <h3 className="text-lg font-semibold text-white line-clamp-1">{event.name}</h3>
+                                    <div className="flex gap-1">
+                                        {event.initialFormat === '7tosmoke' && <span className="text-[10px] bg-purple-900 text-purple-300 px-1.5 py-0.5 rounded border border-purple-700">7 to Smoke</span>}
+                                    </div>
                                 </div>
+                                <div className="flex items-center text-sm text-gray-400"><Calendar size={14} className="mr-1.5 text-red-400"/>{formatDateOnly(event.date)}<span className="mx-2 text-gray-600">|</span><MapPin size={14} className="mr-1.5 text-red-400"/>{event.region}</div>
                             </div>
-                            <div className="flex items-center text-sm text-gray-400"><Calendar size={14} className="mr-1.5 text-red-400"/>{formatDateOnly(event.date)}<span className="mx-2 text-gray-600">|</span><MapPin size={14} className="mr-1.5 text-red-400"/>{event.region}</div>
                         </div>
                     )) : <div className="text-center text-gray-500 py-12 bg-gray-800/30 rounded-xl border border-dashed border-gray-700">{t('noEvents')}</div>}
                 </div>
@@ -576,6 +588,11 @@ const App = () => {
         const [showQualifyAlert, setShowQualifyAlert] = useState(false);
         const [notificationPermission, setNotificationPermission] = useState(Notification.permission);
         const [wakeLock, setWakeLock] = useState(null);
+        
+        // 🆕 編輯模式狀態
+        const [isEditing, setIsEditing] = useState(false);
+        const [editForm, setEditForm] = useState({ ...event });
+        const [isSaving, setIsSaving] = useState(false);
         
         const registration = myRegistrations.find(reg => reg.eventId === event.id);
         const isCreator = user && event.creatorId === user.uid;
@@ -621,14 +638,8 @@ const App = () => {
             if (registration?.called) { 
                 setShowCallAlert(true); 
                 if (audioRef.current) audioRef.current.play().catch(()=>{}); 
-                
                 if (Notification.permission === 'granted') {
-                    try {
-                        new Notification(t('itsYourTurn'), { 
-                            body: t('pleaseGoToStage'),
-                            icon: '/vite.svg'
-                        });
-                    } catch(e){}
+                    try { new Notification(t('itsYourTurn'), { body: t('pleaseGoToStage'), icon: '/vite.svg' }); } catch(e){}
                 }
             }
         }, [registration?.called]);
@@ -651,30 +662,56 @@ const App = () => {
                 const regCollectionRef = collection(db, `artifacts/${appId}/public/data/registrations`);
                 const q = query(regCollectionRef, where("eventId", "==", event.id), where("userId", "==", user.uid));
                 const snapshot = await getDocs(q);
-                
-                if (!snapshot.empty) {
-                    throw new Error("Already registered");
-                }
-
-                // 🆕 修正：報名時不分配號碼，只記錄資料
+                if (!snapshot.empty) throw new Error("Already registered");
                 const newReg = { 
-                    eventId: event.id, 
-                    userId: user.uid, 
-                    queueNumber: null, 
-                    laneAssignment: null, 
-                    isAssigned: false, // 標記為未分配
-                    registrationTime: serverTimestamp(), 
-                    checkedIn: false, 
-                    paid: false, 
-                    called: false, 
-                    qualifiedRound: 1 
+                    eventId: event.id, userId: user.uid, queueNumber: null, laneAssignment: null, isAssigned: false, 
+                    registrationTime: serverTimestamp(), checkedIn: false, paid: false, called: false, qualifiedRound: 1 
                 };
                 const docRef = await addDoc(regCollectionRef, newReg);
                 setMyRegistrations(prev => [...prev, { id: docRef.id, ...newReg }]);
-                navigate('registerSuccess', { ...event, temp: true }); // 導向成功頁面
+                navigate('registerSuccess', { ...event, temp: true }); 
                 requestNotificationPermission();
             } catch (e) {
                 console.error(e); setSystemMessage(`${t('registerFail')}: ${e.message}`); setIsRegistering(false);
+            }
+        };
+
+        // 🆕 更新活動
+        const handleUpdateEvent = async (e) => {
+            e.preventDefault();
+            if (!isCreator) return;
+            setIsSaving(true);
+            try {
+                await updateDoc(doc(db, `artifacts/${appId}/public/data/events`, event.id), {
+                    ...editForm,
+                    // 確保這兩個數值是數字
+                    laneCount: parseInt(editForm.laneCount),
+                    laneCapacity: parseInt(editForm.laneCapacity)
+                });
+                setSystemMessage(t('updateSuccess'));
+                setIsEditing(false);
+                fetchEvents(); // 重新抓取資料
+            } catch (error) {
+                setSystemMessage("Update Failed: " + error.message);
+            } finally {
+                setIsSaving(false);
+            }
+        };
+
+        // 🆕 刪除活動
+        const handleDeleteEvent = async () => {
+            if (!isCreator) return;
+            if (!confirm(t('deleteConfirm'))) return;
+            setIsSaving(true);
+            try {
+                await deleteDoc(doc(db, `artifacts/${appId}/public/data/events`, event.id));
+                setSystemMessage(t('deleteSuccess'));
+                fetchEvents();
+                navigate('browse');
+            } catch (error) {
+                setSystemMessage("Delete Failed: " + error.message);
+            } finally {
+                setIsSaving(false);
             }
         };
 
@@ -696,87 +733,94 @@ const App = () => {
 
                 <button onClick={() => navigate('browse')} className="flex items-center text-gray-400 hover:text-white"><ChevronLeft size={24}/> {t('backToEvents')}</button>
                 
-                <div className="bg-gray-800 p-6 rounded-3xl shadow-2xl border border-gray-700">
-                    <div className="flex justify-between items-start">
-                        <h2 className="text-3xl font-black text-white mb-2">{event.name}</h2>
-                        <div className="flex flex-col items-end gap-2">
-                            {notificationPermission !== 'granted' && (
-                                <button onClick={requestNotificationPermission} className="bg-blue-600 text-white p-2 rounded-full shadow-lg animate-pulse">
-                                    <Bell size={20} />
-                                </button>
-                            )}
-                            {wakeLock && <span className="text-yellow-500 text-xs flex items-center"><Zap size={10} className="mr-1 fill-current"/> On</span>}
-                        </div>
+                {/* 🆕 Banner 圖片顯示 */}
+                {event.bannerUrl && !isEditing && (
+                    <div className="w-full h-48 rounded-3xl overflow-hidden mb-4 border border-gray-700">
+                        <img src={event.bannerUrl} className="w-full h-full object-cover" alt="Event Banner" onError={(e) => e.target.style.display = 'none'} />
                     </div>
-                    <p className="text-gray-300 text-sm mb-4 flex items-center"><Calendar size={16} className="mr-2 text-red-500"/> {formatDateTime(event.date)} | {event.region}</p>
-                    <a href={getMapLink()} target="_blank" rel="noopener noreferrer" className="bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded-full transition flex items-center w-fit mb-4">{t('openMap')} <ExternalLink size={10} className="ml-1"/></a>
-                    <p className="text-gray-400 text-sm whitespace-pre-wrap border-t border-gray-700 pt-4">{event.description}</p>
-                </div>
+                )}
 
-                <div className="fixed bottom-20 left-0 right-0 px-4 md:absolute md:bottom-auto md:px-0 z-20">
-                    {isCreator ? (
-                        <button onClick={() => navigate('manage', event)} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl shadow-xl flex items-center justify-center text-lg">
-                            <Settings size={24} className="mr-2"/> {t('manageEventBtn')}
-                        </button>
-                    ) : (
-                        !registration ? (
-                            <button onClick={handleRegistration} disabled={isRegistering} className="w-full bg-gradient-to-r from-red-600 to-red-700 text-white font-bold py-4 rounded-2xl shadow-xl flex items-center justify-center text-lg">
-                                {isRegistering ? <Loader2 className="animate-spin mr-2"/> : <Users size={24} className="mr-2"/>} {t('randomRegisterBtn')}
-                            </button>
-                        ) : (
-                            <div className="bg-gray-800 p-4 rounded-2xl border border-green-600 text-center relative">
-                                <p className="text-green-400 font-bold">{t('registered')}</p>
-                                {/* 🆕 如果有號碼才顯示，否則顯示等待中 */}
-                                {registration.laneAssignment ? (
-                                    <p className="text-2xl font-black text-white">{registration.laneAssignment}-{formatNumber(registration.queueNumber)}</p>
-                                ) : (
-                                    <p className="text-lg text-yellow-400 font-bold animate-pulse my-2">{t('waitingForDraw')}</p>
-                                )}
-                                {renderStatusBadge(registration)}
-                                {notificationPermission !== 'granted' && <p className="text-xs text-blue-400 mt-2 animate-pulse" onClick={requestNotificationPermission}>{t('notifyHint')}</p>}
+                <div className="bg-gray-800 p-6 rounded-3xl shadow-2xl border border-gray-700">
+                    {isEditing ? (
+                        // 📝 編輯模式表單
+                        <form onSubmit={handleUpdateEvent} className="space-y-4">
+                            <h3 className="text-lg font-bold text-yellow-400 flex items-center"><Edit size={20} className="mr-2"/> {t('editEvent')}</h3>
+                            <input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full p-3 bg-gray-900 border border-gray-600 rounded-xl text-white" placeholder={t('eventNamePh')} required />
+                            <input type="datetime-local" value={editForm.date} onChange={e => setEditForm({...editForm, date: e.target.value})} className="w-full p-3 bg-gray-900 border border-gray-600 rounded-xl text-white" required />
+                            <input type="text" value={editForm.region} onChange={e => setEditForm({...editForm, region: e.target.value})} className="w-full p-3 bg-gray-900 border border-gray-600 rounded-xl text-white" placeholder={t('eventRegionPh')} required />
+                            <input type="text" value={editForm.googleMapLink} onChange={e => setEditForm({...editForm, googleMapLink: e.target.value})} className="w-full p-3 bg-gray-900 border border-gray-600 rounded-xl text-white" placeholder={t('mapLinkPh')} />
+                            {/* 🆕 Banner URL 輸入 */}
+                            <input type="text" value={editForm.bannerUrl} onChange={e => setEditForm({...editForm, bannerUrl: e.target.value})} className="w-full p-3 bg-gray-900 border border-gray-600 rounded-xl text-white" placeholder={t('bannerUrlPh')} />
+                            <textarea value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} className="w-full p-3 bg-gray-900 border border-gray-600 rounded-xl text-white" rows="4" placeholder={t('descPh')} />
+                            <div className="flex gap-2">
+                                <button type="button" onClick={() => setIsEditing(false)} className="flex-1 py-3 bg-gray-700 text-white rounded-xl">{t('cancelEdit')}</button>
+                                <button type="submit" disabled={isSaving} className="flex-1 py-3 bg-green-600 text-white font-bold rounded-xl flex justify-center items-center">{isSaving ? <Loader2 className="animate-spin"/> : t('saveChanges')}</button>
                             </div>
-                        )
+                            <button type="button" onClick={handleDeleteEvent} disabled={isSaving} className="w-full py-3 border border-red-600 text-red-500 font-bold rounded-xl flex justify-center items-center mt-4 hover:bg-red-900/20"><Trash2 size={18} className="mr-2"/> {t('deleteEvent')}</button>
+                        </form>
+                    ) : (
+                        // 👀 瀏覽模式
+                        <>
+                            <div className="flex justify-between items-start">
+                                <h2 className="text-3xl font-black text-white mb-2">{event.name}</h2>
+                                <div className="flex flex-col items-end gap-2">
+                                    {notificationPermission !== 'granted' && (
+                                        <button onClick={requestNotificationPermission} className="bg-blue-600 text-white p-2 rounded-full shadow-lg animate-pulse"><Bell size={20} /></button>
+                                    )}
+                                    {wakeLock && <span className="text-yellow-500 text-xs flex items-center"><Zap size={10} className="mr-1 fill-current"/> On</span>}
+                                    
+                                    {/* 🆕 主辦人編輯按鈕 */}
+                                    {isCreator && (
+                                        <button onClick={() => setIsEditing(true)} className="bg-gray-700 text-gray-300 p-2 rounded-full hover:bg-gray-600 transition">
+                                            <Edit size={16} />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                            <p className="text-gray-300 text-sm mb-4 flex items-center"><Calendar size={16} className="mr-2 text-red-500"/> {formatDateTime(event.date)} | {event.region}</p>
+                            <a href={getMapLink()} target="_blank" rel="noopener noreferrer" className="bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded-full transition flex items-center w-fit mb-4">{t('openMap')} <ExternalLink size={10} className="ml-1"/></a>
+                            <p className="text-gray-400 text-sm whitespace-pre-wrap border-t border-gray-700 pt-4">{event.description}</p>
+                        </>
                     )}
                 </div>
+
+                {!isEditing && (
+                    <div className="fixed bottom-20 left-0 right-0 px-4 md:absolute md:bottom-auto md:px-0 z-20">
+                        {isCreator ? (
+                            <button onClick={() => navigate('manage', event)} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl shadow-xl flex items-center justify-center text-lg">
+                                <Settings size={24} className="mr-2"/> {t('manageEventBtn')}
+                            </button>
+                        ) : (
+                            !registration ? (
+                                <button onClick={handleRegistration} disabled={isRegistering} className="w-full bg-gradient-to-r from-red-600 to-red-700 text-white font-bold py-4 rounded-2xl shadow-xl flex items-center justify-center text-lg">
+                                    {isRegistering ? <Loader2 className="animate-spin mr-2"/> : <Users size={24} className="mr-2"/>} {t('randomRegisterBtn')}
+                                </button>
+                            ) : (
+                                <div className="bg-gray-800 p-4 rounded-2xl border border-green-600 text-center relative">
+                                    <p className="text-green-400 font-bold">{t('registered')}</p>
+                                    {registration.laneAssignment ? (
+                                        <p className="text-2xl font-black text-white">{registration.laneAssignment}-{formatNumber(registration.queueNumber)}</p>
+                                    ) : (
+                                        <p className="text-lg text-yellow-400 font-bold animate-pulse my-2">{t('waitingForDraw')}</p>
+                                    )}
+                                    {renderStatusBadge(registration)}
+                                    {notificationPermission !== 'granted' && <p className="text-xs text-blue-400 mt-2 animate-pulse" onClick={requestNotificationPermission}>{t('notifyHint')}</p>}
+                                </div>
+                            )
+                        )}
+                    </div>
+                )}
                 <div className="h-24"></div>
             </div>
         );
     };
 
-    // 3. 報名成功畫面 (RegistrationSuccess) ... (保持不變)
-    const RegistrationSuccess = ({ event }) => (
-        <div className="p-8 flex flex-col items-center justify-center min-h-[70vh] text-center space-y-8">
-            <div className="relative"><div className="absolute inset-0 bg-green-500/30 blur-3xl rounded-full"></div><CheckCircle size={100} className="text-green-500 relative z-10 animate-bounce"/></div>
-            <div><h2 className="text-4xl font-black text-white mb-2">{t('congrats')}</h2><p className="text-gray-400">{t('successMsg')} <span className="text-white font-bold">{event.name}</span></p></div>
-            <div className="bg-gray-800 p-8 rounded-3xl shadow-2xl w-full border border-gray-700">
-                {/* 🆕 修改成功畫面邏輯 */}
-                {event.laneAssignment ? (
-                    <>
-                        <p className="text-gray-400 text-sm uppercase tracking-widest mb-2">{t('yourNumber')}</p>
-                        <div className="flex justify-center items-baseline text-white font-black tracking-widest">
-                            <span className="text-7xl text-indigo-400">{event.laneAssignment}</span>
-                            <span className="text-5xl mx-2">-</span>
-                            <span className="text-8xl">{formatNumber(event.queueNumber)}</span>
-                        </div>
-                    </>
-                ) : (
-                    <div className="py-4">
-                        <div className="text-yellow-400 text-xl font-bold mb-2">{t('waitingForDraw')}</div>
-                        <p className="text-gray-400 text-sm">請先完成報到手續，主辦單位將在報名截止後進行抽籤分組。</p>
-                    </div>
-                )}
-                <div className="mt-6 pt-6 border-t border-gray-700/50"><p className="text-sm text-yellow-500 font-medium flex items-center justify-center"><CreditCard size={14} className="mr-2"/> {t('rememberPayment')}</p></div>
-            </div>
-            <button onClick={() => navigate('browse')} className="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 rounded-2xl transition">{t('backToHome')}</button>
-        </div>
-    );
-
-    // 4. 創建活動頁面 (CreateEventForm) ... (保持不變)
+    // 3. 創建活動
     const CreateEventForm = () => {
         const [formData, setFormData] = useState({
             name: '', date: '', region: '', description: '', 
             laneCount: 4, laneCapacity: 50, 
-            googleMapLink: '', paymentInfo: '', paymentQrCodeUrl: '',
+            googleMapLink: '', bannerUrl: '', paymentInfo: '', paymentQrCodeUrl: '',
             initialFormat: 'standard'
         });
         const [rounds, setRounds] = useState([{ round: 2, qualifiers: 64 }]); 
@@ -805,21 +849,27 @@ const App = () => {
         };
         return (
             <div className="p-4 pb-24 space-y-4">
-                <button onClick={() => navigate('browse')} className="flex items-center text-gray-400 hover:text-white transition"><ChevronLeft size={24} className="mr-1"/> {t('backToHome')}</button>
+                <button onClick={() => navigate('browse')} className="flex items-center text-gray-400 hover:text-white"><ChevronLeft size={24}/> {t('backToHome')}</button>
                 <h2 className="text-3xl font-bold text-white mb-6">{t('createEventTitle')}</h2>
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="bg-gray-800 p-5 rounded-3xl border border-gray-700 shadow-lg space-y-4">
                         <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">{t('basicInfo')}</h3>
-                        <input type="text" name="name" placeholder={t('eventNamePh')} value={formData.name} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
-                        <input type="datetime-local" name="date" value={formData.date} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
-                        <input type="text" name="region" placeholder={t('eventRegionPh')} value={formData.region} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
-                        <textarea name="description" placeholder={t('descPh')} value={formData.description} onChange={handleChange} rows="3" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
+                        <input type="text" name="name" placeholder={t('eventNamePh')} value={formData.name} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
+                        <input type="datetime-local" name="date" value={formData.date} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
+                        <input type="text" name="region" placeholder={t('eventRegionPh')} value={formData.region} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
+                        <input type="text" name="googleMapLink" placeholder={t('mapLinkPh')} value={formData.googleMapLink} onChange={handleChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
+                        {/* 🆕 Banner Input */}
+                        <div className="relative">
+                            <ImageIcon size={18} className="absolute left-3 top-4 text-gray-500"/>
+                            <input type="text" name="bannerUrl" placeholder={t('bannerUrlPh')} value={formData.bannerUrl} onChange={handleChange} className="w-full p-4 pl-10 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
+                        </div>
+                        <textarea name="description" placeholder={t('descPh')} value={formData.description} onChange={handleChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
                     </div>
                     <div className="bg-gray-800 p-5 rounded-3xl border border-gray-700 shadow-lg space-y-4">
                         <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">{t('compSettingsTitle')}</h3>
                         <div className="grid grid-cols-2 gap-4">
                             <div><label className="block text-gray-500 text-xs mb-2">{t('laneCountPh')}</label><select value={getLaneName(formData.laneCount - 1)} onChange={handleLaneLetterChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition appearance-none">{alphabetOptions.map((letter, idx) => (<option key={letter} value={letter}>{letter} ({idx + 1} Lane{idx > 0 ? 's' : ''})</option>))}</select></div>
-                            <div><label className="block text-gray-500 text-xs mb-2">{t('laneCapacityPh')}</label><input type="number" name="laneCapacity" placeholder="50" value={formData.laneCapacity} onChange={handleChange} min="1" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/></div>
+                            <div><label className="block text-gray-500 text-xs mb-2">{t('laneCapacityPh')}</label><input type="number" name="laneCapacity" placeholder="50" value={formData.laneCapacity} onChange={handleChange} min="1" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/></div>
                         </div>
                         <p className="text-xs text-gray-500 mt-1 flex items-center"><Hash size={12} className="mr-1"/> {t('laneHint').replace('{total}', formData.laneCount * formData.laneCapacity).replace('{lastChar}', getLaneName(formData.laneCount - 1))}</p>
                     </div>
@@ -836,8 +886,8 @@ const App = () => {
                     </div>
                     <div className="bg-gray-800 p-5 rounded-3xl border border-gray-700 shadow-lg space-y-4">
                         <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">{t('paymentSettingsTitle')}</h3>
-                        <textarea name="paymentInfo" placeholder={t('paymentDescPh')} value={formData.paymentInfo} onChange={handleChange} rows="3" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
-                        <input type="text" name="paymentQrCodeUrl" placeholder={t('paymentQrPh')} value={formData.paymentQrCodeUrl} onChange={handleChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
+                        <textarea name="paymentInfo" placeholder={t('paymentDescPh')} value={formData.paymentInfo} onChange={handleChange} rows="3" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
+                        <input type="text" name="paymentQrCodeUrl" placeholder={t('paymentQrPh')} value={formData.paymentQrCodeUrl} onChange={handleChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
                     </div>
                     <button type="submit" disabled={isSubmitting} className="w-full bg-red-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition flex items-center justify-center text-lg">{isSubmitting ? <Loader2 className="animate-spin" size={24} /> : t('publishBtn')}</button>
                 </form>
@@ -1074,6 +1124,7 @@ const App = () => {
                          <h3 className="text-sm text-gray-400 mb-2 flex items-center"><Settings size={14} className="mr-1"/> {t('callStrategy')}</h3>
                          <div className="flex flex-col gap-2">
                             <div className="flex items-center justify-between"><span className="text-white text-sm">{t('mode')}:</span><div className="flex bg-gray-700 rounded p-1"><button onClick={() => saveCallSettings({...callSettings, callMode: 'single'})} className={`px-3 py-1 text-xs rounded transition ${callSettings.callMode === 'single' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>{t('modeSingle')}</button><button onClick={() => saveCallSettings({...callSettings, callMode: 'all_lanes'})} className={`px-3 py-1 text-xs rounded transition ${callSettings.callMode === 'all_lanes' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>{t('modeAllLanes')}</button></div></div>
+                            {callSettings.callMode === 'single' && <div className="flex items-center justify-between"><span className="text-white text-sm">{t('emptyStrategy')}:</span><div className="flex bg-gray-700 rounded p-1"><button onClick={() => saveCallSettings({...callSettings, strictSequence: false})} className={`px-3 py-1 text-xs rounded transition ${!callSettings.strictSequence ? 'bg-green-600 text-white' : 'text-gray-400'}`}>{t('skipEmpty')}</button><button onClick={() => saveCallSettings({...callSettings, strictSequence: true})} className={`px-3 py-1 text-xs rounded transition ${callSettings.strictSequence ? 'bg-red-600 text-white' : 'text-gray-400'}`}>{t('keepEmpty')}</button></div></div>}
                          </div>
                     </div>
                     <div className="bg-gray-800 p-6 rounded-xl shadow-inner border-b-4 border-red-500 text-center"><p className="text-lg text-red-300 font-semibold mb-3">{t('currentCall')}</p><div className="flex justify-center items-center gap-4 flex-wrap min-h-[100px]">{displayNums.length > 0 ? displayNums.map((num, idx) => (<div key={idx} className="text-6xl font-black text-white p-4 bg-red-700 rounded-xl shadow-lg border-2 border-red-400 min-w-[100px] animate-in zoom-in duration-300">{formatNumber(num)}</div>)) : <span className="text-4xl text-gray-500">--</span>}</div></div>
