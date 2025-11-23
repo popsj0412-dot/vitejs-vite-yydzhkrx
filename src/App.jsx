@@ -836,87 +836,252 @@ const App = () => {
                         </div>
                         <p className="text-xs text-gray-500 mt-1 flex items-center"><Hash size={12} className="mr-1"/> {t('laneHint').replace('{total}', formData.laneCount * formData.laneCapacity).replace('{lastChar}', getLaneName(formData.laneCount - 1))}</p>
                     </div>
-                    <button type="submit" disabled={isSubmitting} className="w-full bg-red-600 text-white font-bold py-4 rounded-2xl shadow-lg">{isSubmitting ? <Loader2 className="animate-spin mx-auto"/> : t('publishBtn')}</button>
+                    <div className="bg-gray-800 p-5 rounded-3xl border border-gray-700 shadow-lg space-y-4">
+                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">{t('roundConfigTitle')}</h3>
+                        <p className="text-xs text-gray-500">{t('roundConfigDesc')}</p>
+                        {rounds.map((round, index) => (
+                            <div key={index} className="flex gap-2 items-center">
+                                <div className="flex-1 bg-gray-900 p-3 rounded-xl border border-gray-700 text-white text-sm flex items-center"><span className="text-gray-400 mr-2">{t('roundLabel')} {round.round}:</span><input type="number" value={round.qualifiers} onChange={(e) => updateRoundConfig(index, 'qualifiers', e.target.value)} className="bg-transparent w-full outline-none text-right" placeholder="Qualifiers"/><span className="ml-2 text-gray-500">人</span></div>
+                                <button type="button" onClick={() => removeRoundConfig(index)} className="p-3 bg-red-900/30 text-red-400 rounded-xl hover:bg-red-900/50"><Trash2 size={18}/></button>
+                            </div>
+                        ))}
+                        <button type="button" onClick={addRoundConfig} className="w-full py-2 border border-dashed border-gray-600 rounded-xl text-gray-400 hover:text-white hover:border-gray-400 text-sm flex items-center justify-center"><PlusCircle size={16} className="mr-1"/> {t('addRound')}</button>
+                    </div>
+                    <div className="bg-gray-800 p-5 rounded-3xl border border-gray-700 shadow-lg space-y-4">
+                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">{t('paymentSettingsTitle')}</h3>
+                        <textarea name="paymentInfo" placeholder={t('paymentDescPh')} value={formData.paymentInfo} onChange={handleChange} rows="3" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
+                        <input type="text" name="paymentQrCodeUrl" placeholder={t('paymentQrPh')} value={formData.paymentQrCodeUrl} onChange={handleChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
+                    </div>
+                    <button type="submit" disabled={isSubmitting} className="w-full bg-red-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition flex items-center justify-center text-lg">{isSubmitting ? <Loader2 className="animate-spin" size={24} /> : t('publishBtn')}</button>
                 </form>
             </div>
         );
     };
 
-    // ... (其他組件 MyEvents, ManagementList, EventManager, RegistrationSuccess 等保持不變) ...
-    // 為了完整性，以下補上剩餘組件
-    
-    const MyEvents = () => {
-        const myJoinedEvents = events.filter(e => myRegistrations.some(r => r.eventId === e.id));
-        return (
-             <div className="p-4 space-y-4 pb-24">
-                <h2 className="text-2xl font-bold text-white mb-4">{t('myEventsTitle')}</h2>
-                {myJoinedEvents.length === 0 ? (
-                    <div className="text-center text-gray-500 py-12 border border-dashed border-gray-700 rounded-xl">{t('noJoinedEvents')}</div>
-                ) : (
-                    <div className="space-y-3">
-                        {myJoinedEvents.map(event => {
-                             const reg = myRegistrations.find(r => r.eventId === event.id);
-                             if (!reg) return null;
-                             return (
-                                <div key={event.id} onClick={() => navigate('detail', event)} className="bg-gray-800 p-4 rounded-2xl border border-gray-700 cursor-pointer active:bg-gray-700 transition">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <h3 className="font-bold text-white text-lg">{event.name}</h3>
-                                        <span className="text-xs bg-green-900 text-green-300 px-2 py-1 rounded">{t('registered')}</span>
-                                    </div>
-                                    <p className="text-sm text-gray-400 flex items-center mb-3"><Calendar size={14} className="mr-2"/> {formatDateTime(event.date)}</p>
-                                    <div className="flex items-center justify-between bg-gray-900/50 p-2 rounded-lg">
-                                        <span className="text-xs text-gray-500">{t('yourNumber')}</span>
-                                        <span className="text-xl font-black text-indigo-400">{reg.laneAssignment}-{formatNumber(reg.queueNumber)}</span>
-                                    </div>
-                                </div>
-                             );
-                        })}
-                    </div>
-                )}
-             </div>
-        );
-    };
-
-    const ManagementList = () => {
-        const myHostedEvents = events.filter(e => e.creatorId === user.uid);
-        return (
-             <div className="p-4 space-y-4 pb-24">
-                <h2 className="text-2xl font-bold text-white mb-4">{t('manageListTitle')}</h2>
-                {myHostedEvents.length === 0 ? (
-                    <div className="text-center text-gray-500 py-12 border border-dashed border-gray-700 rounded-xl">{t('noHostedEvents')}</div>
-                ) : (
-                    <div className="space-y-3">
-                        {myHostedEvents.map(event => (
-                            <div key={event.id} className="bg-gray-800 p-4 rounded-2xl border-l-4 border-indigo-500 shadow-lg">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div>
-                                        <h3 className="font-bold text-white text-lg">{event.name}</h3>
-                                        <p className="text-sm text-gray-400 mt-1">{formatDateTime(event.date)}</p>
-                                    </div>
-                                </div>
-                                <button onClick={() => navigate('manage', event)} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-xl text-sm font-bold flex items-center justify-center transition">
-                                    <Settings size={16} className="mr-2"/> {t('enterManage')}
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-             </div>
-        );
-    };
-
-    const RegistrationSuccess = ({ event }) => (
-        <div className="p-8 text-center"><h2 className="text-white text-2xl">{t('congrats')}</h2><button onClick={()=>navigate('browse')} className="mt-4 text-white bg-gray-700 px-4 py-2 rounded">OK</button></div>
-    );
-
+    // 7. Event Manager (後台) - 完整版
     const EventManager = ({ event }) => {
-        // 這裡使用簡化的管理介面，實際整合時請複製之前完整的 EventManager 程式碼
-        // 為了示範，這裡僅保留基本結構，請確保使用前面提供的完整 EventManager 邏輯
+        const [activeTab, setActiveTab] = useState('calling');
+        const [allRegistrations, setAllRegistrations] = useState([]);
+        const [callStatus, setCallStatus] = useState({ displayNumbers: [], currentSequence: 1 });
+        const [isProcessing, setIsProcessing] = useState(false);
+        const [laneSettings, setLaneSettings] = useState({ count: event.laneCount, capacity: event.laneCapacity });
+        const [callSettings, setCallSettings] = useState({ callMode: event.callMode || 'single', strictSequence: event.strictSequence || false });
+        
+        const REG_COL_PATH = `artifacts/${appId}/public/data/registrations`;
+        const STATUS_DOC_PATH = `artifacts/${appId}/public/data/call_status/${event.id}`;
+        const EVENT_DOC_REF = doc(db, `artifacts/${appId}/public/data/events`, event.id);
+        
+        useEffect(() => {
+            if (!db) return;
+            const unsubscribeStatus = onSnapshot(doc(db, STATUS_DOC_PATH), (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    setCallStatus({ displayNumbers: data.displayNumbers || [], currentSequence: data.currentSequence || 1 });
+                }
+            });
+            const q = query(collection(db, REG_COL_PATH), where("eventId", "==", event.id));
+            const unsubscribeRegs = onSnapshot(q, (snapshot) => {
+                setAllRegistrations(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.queueNumber - b.queueNumber));
+            });
+            return () => { unsubscribeStatus(); unsubscribeRegs(); };
+        }, [db, STATUS_DOC_PATH, REG_COL_PATH, event.id]);
+
+        const saveCallSettings = async (newSettings) => { setCallSettings(newSettings); if (db) await updateDoc(EVENT_DOC_REF, newSettings); };
+
+        const handleCallNext = async () => {
+            if (!db || isProcessing) return;
+            setIsProcessing(true); setSystemMessage(t('calculatingNext'));
+            try {
+                const availableRegs = allRegistrations.filter(r => r.checkedIn && !r.called && r.laneAssignment);
+                const sortedRegs = [...availableRegs].sort((a, b) => a.queueNumber - b.queueNumber);
+                let nextDisplayNumbers = []; let updates = []; let nextSeq = callStatus.currentSequence;
+
+                if (callSettings.callMode === 'single') {
+                    if (callSettings.strictSequence) {
+                        nextDisplayNumbers = [nextSeq];
+                        const target = sortedRegs.find(r => r.queueNumber === nextSeq);
+                        if (target) updates.push(target.id);
+                        nextSeq++;
+                    } else {
+                        if (sortedRegs.length > 0) {
+                            const target = sortedRegs[0];
+                            nextDisplayNumbers = [target.queueNumber];
+                            updates.push(target.id);
+                            nextSeq = target.queueNumber + 1; 
+                        } else {
+                            setSystemMessage(t('noMorePlayers')); setIsProcessing(false); return;
+                        }
+                    }
+                } else {
+                    const lanes = [...new Set(allRegistrations.map(r => r.laneAssignment).filter(l => l))].sort();
+                    lanes.forEach(lane => {
+                        const candidate = sortedRegs.find(r => r.laneAssignment === lane);
+                        if (candidate) { nextDisplayNumbers.push(candidate.queueNumber); updates.push(candidate.id); }
+                    });
+                    if (nextDisplayNumbers.length === 0) { setSystemMessage(t('allLanesEmpty')); setIsProcessing(false); return; }
+                }
+
+                const statusRef = doc(db, STATUS_DOC_PATH);
+                await setDoc(statusRef, { displayNumbers: nextDisplayNumbers, currentSequence: nextSeq, updatedAt: serverTimestamp() }, { merge: true });
+                for (const regId of updates) { await updateDoc(doc(db, REG_COL_PATH, regId), { called: true }); }
+                setSystemMessage(`${t('callSuccess')}: ${nextDisplayNumbers.join(', ')}`);
+            } catch (e) { console.error(e); setSystemMessage(`${t('callFail')}: ${e.message}`); } finally { setIsProcessing(false); }
+        };
+
+        const handleStart7toSmoke = async () => {
+            const qualified = allRegistrations.filter(r => r.qualifiedRound === event.currentRound);
+            if (qualified.length !== 8) { setSystemMessage(t('smokeReq')); return; }
+            const shuffled = [...qualified].sort(() => 0.5 - Math.random());
+            const newState = { king: shuffled[0].id, challenger: shuffled[1].id, queue: shuffled.slice(2).map(r => r.id), wins: {} };
+            await updateDoc(EVENT_DOC_REF, { callMode: '7tosmoke', smokeState: newState });
+            setSystemMessage("7 to Smoke Started!");
+        };
+
+        const handleSmokeWin = async (winnerId) => {
+            const state = event.smokeState;
+            const loserId = winnerId === state.king ? state.challenger : state.king;
+            const newWins = { ...state.wins, [winnerId]: (state.wins[winnerId] || 0) + 1 };
+            let newKing = state.king; let newChallenger = state.challenger; let newQueue = [...state.queue];
+            if (winnerId === state.challenger) { newKing = state.challenger; newQueue.push(state.king); } else { newQueue.push(state.challenger); }
+            newChallenger = newQueue.shift(); 
+            await updateDoc(EVENT_DOC_REF, { smokeState: { king: newKing, challenger: newChallenger, queue: newQueue, wins: newWins } });
+        };
+
+        const handleStartTournament = async () => {
+            const qualified = allRegistrations.filter(r => r.qualifiedRound === event.currentRound);
+            if (qualified.length < 2 || qualified.length % 2 !== 0) { setSystemMessage(t('tournReq')); return; }
+            const shuffled = [...qualified].sort(() => 0.5 - Math.random());
+            const matches = [];
+            for (let i = 0; i < shuffled.length; i += 2) { matches.push({ p1: shuffled[i].id, p2: shuffled[i+1].id, winner: null }); }
+            await updateDoc(EVENT_DOC_REF, { callMode: 'tournament', tournamentState: { matches } });
+            setSystemMessage("Tournament Started!");
+        };
+
+        const handleTournamentWin = async (matchIndex, winnerId) => {
+            const newMatches = [...event.tournamentState.matches];
+            newMatches[matchIndex].winner = winnerId;
+            await updateDoc(doc(db, REG_COL_PATH, winnerId), { qualifiedRound: event.currentRound + 1 });
+            await updateDoc(EVENT_DOC_REF, { tournamentState: { matches: newMatches } });
+        };
+
+        // Sub-components
+        const CallingStatusTab = () => {
+            const displayNums = callStatus.displayNumbers;
+            return (
+                <div className="space-y-4">
+                    <div className="bg-gray-800 p-4 rounded-xl border border-gray-600 mb-4">
+                         <h3 className="text-sm text-gray-400 mb-2 flex items-center"><Settings size={14} className="mr-1"/> {t('callStrategy')}</h3>
+                         <div className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between"><span className="text-white text-sm">{t('mode')}:</span><div className="flex bg-gray-700 rounded p-1"><button onClick={() => saveCallSettings({...callSettings, callMode: 'single'})} className={`px-3 py-1 text-xs rounded transition ${callSettings.callMode === 'single' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>{t('modeSingle')}</button><button onClick={() => saveCallSettings({...callSettings, callMode: 'all_lanes'})} className={`px-3 py-1 text-xs rounded transition ${callSettings.callMode === 'all_lanes' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>{t('modeAllLanes')}</button></div></div>
+                            {callSettings.callMode === 'single' && <div className="flex items-center justify-between"><span className="text-white text-sm">{t('emptyStrategy')}:</span><div className="flex bg-gray-700 rounded p-1"><button onClick={() => saveCallSettings({...callSettings, strictSequence: false})} className={`px-3 py-1 text-xs rounded transition ${!callSettings.strictSequence ? 'bg-green-600 text-white' : 'text-gray-400'}`}>{t('skipEmpty')}</button><button onClick={() => saveCallSettings({...callSettings, strictSequence: true})} className={`px-3 py-1 text-xs rounded transition ${callSettings.strictSequence ? 'bg-red-600 text-white' : 'text-gray-400'}`}>{t('keepEmpty')}</button></div></div>}
+                         </div>
+                    </div>
+                    <div className="bg-gray-800 p-6 rounded-xl shadow-inner border-b-4 border-red-500 text-center"><p className="text-lg text-red-300 font-semibold mb-3">{t('currentCall')}</p><div className="flex justify-center items-center gap-4 flex-wrap min-h-[100px]">{displayNums.length > 0 ? displayNums.map((num, idx) => (<div key={idx} className="text-6xl font-black text-white p-4 bg-red-700 rounded-xl shadow-lg border-2 border-red-400 min-w-[100px] animate-in zoom-in duration-300">{formatNumber(num)}</div>)) : <span className="text-4xl text-gray-500">--</span>}</div></div>
+                    <button onClick={handleCallNext} disabled={isProcessing} className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-4 rounded-lg shadow-md transition flex items-center justify-center text-lg active:scale-95">{isProcessing ? <Loader2 className="animate-spin mr-2" size={24} /> : <Megaphone size={24} className="mr-2"/>}{callSettings.callMode === 'all_lanes' ? t('callNextBatch') : t('callNext')}</button>
+                </div>
+            );
+        };
+
+        const SevenToSmokeUI = () => {
+            const state = event.smokeState; if (!state || !state.king) return <div>Loading...</div>;
+            const getDancer = (id) => allRegistrations.find(r => r.id === id);
+            const king = getDancer(state.king); const challenger = getDancer(state.challenger);
+            return (
+                <div className="space-y-6"><div className="flex justify-between items-center bg-purple-900/50 p-4 rounded-xl border border-purple-500"><div className="text-center w-1/2 border-r border-purple-700"><Crown size={32} className="mx-auto text-yellow-400 mb-2"/><p className="text-xs text-purple-300 uppercase">{t('smokeKing')}</p><p className="text-2xl font-black text-white">{king ? `${king.laneAssignment}-${formatNumber(king.queueNumber)}` : '?'}</p><p className="text-xl text-yellow-400 font-bold">{state.wins[state.king] || 0} Wins</p><button onClick={() => handleSmokeWin(state.king)} className="mt-2 bg-yellow-600 text-white text-xs px-4 py-2 rounded-lg font-bold">{t('smokeWinBtn')}</button></div><div className="text-center w-1/2"><Swords size={32} className="mx-auto text-red-400 mb-2"/><p className="text-xs text-red-300 uppercase">{t('smokeChallenger')}</p><p className="text-2xl font-black text-white">{challenger ? `${challenger.laneAssignment}-${formatNumber(challenger.queueNumber)}` : '?'}</p><p className="text-xl text-gray-400 font-bold">{state.wins[state.challenger] || 0} Wins</p><button onClick={() => handleSmokeWin(state.challenger)} className="mt-2 bg-red-600 text-white text-xs px-4 py-2 rounded-lg font-bold">{t('smokeWinBtn')}</button></div></div><div className="bg-gray-800 p-4 rounded-xl"><p className="text-sm text-gray-400 mb-2 flex items-center"><Users size={14} className="mr-1"/> {t('smokeInLine')}</p><div className="flex gap-2 overflow-x-auto pb-2">{state.queue.map((id, idx) => { const d = getDancer(id); return <div key={idx} className="bg-gray-700 px-3 py-1 rounded text-sm whitespace-nowrap">{idx+1}. {d ? `${d.laneAssignment}-${formatNumber(d.queueNumber)}` : '?'}</div> })}</div></div></div>
+            );
+        };
+
+        const TournamentUI = () => {
+            const matches = event.tournamentState?.matches || []; const getDancer = (id) => allRegistrations.find(r => r.id === id);
+            return (
+                <div className="space-y-4"><h3 className="text-xl font-bold text-white flex items-center"><Trophy size={20} className="mr-2 text-yellow-500"/> {t('tournTitle')}</h3><div className="space-y-3">{matches.map((match, idx) => { const p1 = getDancer(match.p1); const p2 = getDancer(match.p2); const isFinished = !!match.winner; return (<div key={idx} className={`bg-gray-800 p-3 rounded-xl border ${isFinished ? 'border-gray-700 opacity-60' : 'border-blue-500'}`}><div className="flex justify-between items-center mb-2"><span className="text-xs text-gray-500">Battle {idx + 1}</span>{isFinished && <span className="text-xs bg-green-900 text-green-300 px-2 rounded">Finished</span>}</div><div className="flex justify-between items-center"><div className={`text-center ${match.winner === match.p1 ? 'text-green-400 font-bold' : 'text-white'}`}><p className="text-lg">{p1 ? `${p1.laneAssignment}-${formatNumber(p1.queueNumber)}` : '?'}</p>{!isFinished && <button onClick={() => handleTournamentWin(idx, match.p1)} className="text-xs bg-gray-700 px-2 py-1 rounded mt-1 hover:bg-green-600">{t('tournWinnerBtn')}</button>}</div><span className="text-gray-500 font-bold">VS</span><div className={`text-center ${match.winner === match.p2 ? 'text-green-400 font-bold' : 'text-white'}`}><p className="text-lg">{p2 ? `${p2.laneAssignment}-${formatNumber(p2.queueNumber)}` : '?'}</p>{!isFinished && <button onClick={() => handleTournamentWin(idx, match.p2)} className="text-xs bg-gray-700 px-2 py-1 rounded mt-1 hover:bg-green-600">{t('tournWinnerBtn')}</button>}</div></div></div>); })}</div></div>
+            );
+        };
+
+        const CheckInTab = () => {
+            const [searchTerm, setSearchTerm] = useState('');
+            const handleToggle = async (regId, field) => { if (!db) return; await updateDoc(doc(db, REG_COL_PATH, regId), { [field]: !allRegistrations.find(r => r.id === regId)[field] }); };
+            const filteredRegs = allRegistrations.filter(reg => reg.queueNumber.toString().includes(searchTerm));
+            const total = allRegistrations.length; const checkedInCount = allRegistrations.filter(r => r.checkedIn).length; const paidCount = allRegistrations.filter(r => r.paid).length;
+            return (
+                <div className="space-y-4"><div className="bg-gray-800 p-4 rounded-xl border border-gray-600 space-y-3"><div className="flex justify-between text-xs text-gray-400 px-1"><span>{t('statsTotal')}: {total}</span><span className="text-green-400">{t('statsCheckedIn')}: {checkedInCount}</span><span className="text-yellow-400">{t('statsPaid')}: {paidCount}</span></div><div className="relative"><Search className="absolute left-3 top-2.5 text-gray-500" size={16} /><input type="number" placeholder={t('searchPlaceholder')} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-gray-900 text-white pl-10 pr-4 py-2 rounded-lg border border-gray-700 focus:border-indigo-500 outline-none placeholder-gray-600"/></div></div><div className="max-h-96 overflow-y-auto bg-gray-900 rounded-lg p-2 space-y-2">{filteredRegs.length > 0 ? filteredRegs.map(reg => (<div key={reg.id} className={`flex flex-col p-3 bg-gray-800 rounded-lg border-l-4 transition ${reg.called ? 'border-gray-500 opacity-60' : 'border-yellow-500'}`}><div className="flex justify-between items-start mb-2"><div><span className="text-3xl font-black text-white mr-2">{formatNumber(reg.queueNumber)}</span>{reg.called && <span className="text-xs bg-gray-600 px-2 py-0.5 rounded text-white inline-block">{t('called')}</span>}</div><div className="text-right">{reg.laneAssignment ? <span className="text-xs font-bold text-indigo-400 bg-indigo-900/30 px-2 py-1 rounded">{reg.laneAssignment}</span> : <span className="text-xs text-gray-500">--</span>}</div></div><div className="grid grid-cols-2 gap-2"><button onClick={() => handleToggle(reg.id, 'paid')} className={`flex items-center justify-center px-3 py-2 rounded-lg text-sm font-bold transition border ${reg.paid ? 'bg-green-600 border-green-600 text-white' : 'bg-transparent border-gray-600 text-gray-400'}`}><DollarSign size={14} className="mr-1"/> {reg.paid ? t('statusPaid') : t('statusNotPaid')}</button><button onClick={() => handleToggle(reg.id, 'checkedIn')} className={`flex items-center justify-center px-3 py-2 rounded-lg text-sm font-bold transition border ${reg.checkedIn ? 'bg-blue-600 border-blue-600 text-white' : 'bg-transparent border-gray-600 text-gray-400'}`}><ListChecks size={14} className="mr-1"/> {reg.checkedIn ? t('statusCheckedIn') : t('statusNotCheckedIn')}</button></div></div>)) : <p className="text-center text-gray-500 py-8">{t('noResult')}</p>}</div></div>
+            );
+        };
+
+        const ProgressionTab = () => {
+            const [manualInput, setManualInput] = useState('');
+            const [randomCount, setRandomCount] = useState('');
+            const currentRound = event.currentRound || 1;
+            const roundStatus = event.roundStatus || 'active';
+            const nextRoundConfig = event.roundsConfig?.find(r => r.round === currentRound + 1);
+            const targetQualifiers = nextRoundConfig ? nextRoundConfig.qualifiers : '未設定';
+
+            const handleAdvance = async (method) => {
+                if (!db || isProcessing) return;
+                setIsProcessing(true); setSystemMessage(t('advancing'));
+                try {
+                    let qualifiedIds = [];
+                    const currentQualifiedRegs = allRegistrations.filter(r => (r.qualifiedRound || 1) === currentRound && r.checkedIn && r.paid);
+                    if (method === 'manual') {
+                        const entries = manualInput.split(/[,，\s]+/).filter(s => s.trim());
+                        for (const entry of entries) {
+                            const match = entry.match(/^([A-Za-z])(\d+)$/i);
+                            if (match) {
+                                const laneChar = match[1].toUpperCase();
+                                const num = parseInt(match[2]);
+                                const target = currentQualifiedRegs.find(r => r.laneAssignment === laneChar && r.queueNumber === num);
+                                if (target) qualifiedIds.push(target.id);
+                            }
+                        }
+                        if (qualifiedIds.length === 0) throw new Error("No matches");
+                    } else if (method === 'random') {
+                        const count = parseInt(randomCount);
+                        if (!count || count > currentQualifiedRegs.length) throw new Error("Invalid count");
+                        const shuffled = [...currentQualifiedRegs].sort(() => 0.5 - Math.random());
+                        qualifiedIds = shuffled.slice(0, count).map(r => r.id);
+                    }
+                    for (const id of qualifiedIds) { await updateDoc(doc(db, REG_COL_PATH, id), { qualifiedRound: currentRound + 1 }); }
+                    await updateDoc(EVENT_DOC_REF, { currentRound: currentRound + 1 });
+                    setSystemMessage(t('advanceSuccess')); setManualInput(''); setRandomCount('');
+                } catch (e) { setSystemMessage(`${t('advanceFail')}: ${e.message}`); } finally { setIsProcessing(false); }
+            };
+
+            const handleEndEvent = async () => { if(confirm("Sure?")) { await updateDoc(EVENT_DOC_REF, { roundStatus: 'closed' }); } };
+
+            if (roundStatus === 'closed') return <div className="p-8 text-center text-gray-400 bg-gray-800 rounded-xl">Closed</div>;
+
+            return (
+                <div className="space-y-6">
+                    <div className="bg-gray-800 p-4 rounded-xl border border-gray-600 flex justify-between items-center"><div><p className="text-sm text-gray-400">{t('currentRound')}</p><p className="text-2xl font-bold text-white">{t('roundText').replace('{n}', currentRound)}</p></div><div className="text-right"><p className="text-sm text-gray-400">{t('nextRoundTarget')}</p><p className="text-xl font-bold text-yellow-400">{targetQualifiers} 人</p></div></div>
+                    <div className="bg-gray-700 p-5 rounded-2xl space-y-4"><h3 className="text-lg font-bold text-white flex items-center"><Trophy size={20} className="mr-2 text-yellow-500"/> {t('advanceManual')}</h3><input type="text" value={manualInput} onChange={(e) => setManualInput(e.target.value)} placeholder={t('advanceManualPh')} className="w-full p-3 bg-gray-800 text-white rounded-xl border border-gray-600 focus:border-yellow-500 outline-none"/><button onClick={() => handleAdvance('manual')} disabled={isProcessing} className="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 rounded-xl transition">{t('advanceBtn')}</button></div>
+                    <div className="bg-gray-700 p-5 rounded-2xl space-y-4"><h3 className="text-lg font-bold text-white flex items-center"><Shuffle size={20} className="mr-2 text-purple-400"/> {t('advanceRandom')}</h3><input type="number" value={randomCount} onChange={(e) => setRandomCount(e.target.value)} placeholder={t('advanceRandomCountPh')} className="w-full p-3 bg-gray-800 text-white rounded-xl border border-gray-600 focus:border-purple-500 outline-none"/><button onClick={() => handleAdvance('random')} disabled={isProcessing} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-xl transition">{t('advanceBtn')}</button></div>
+                    <div className="bg-gradient-to-br from-gray-800 to-gray-900 p-5 rounded-2xl border border-gray-700"><h3 className="text-lg font-bold text-white mb-4 flex items-center"><Sparkles size={18} className="mr-2 text-yellow-400"/> {t('specialModesTitle')}</h3><div className="grid grid-cols-1 gap-3"><button onClick={handleStart7toSmoke} className="bg-purple-700 hover:bg-purple-600 text-white py-3 rounded-xl font-bold flex items-center justify-center transition"><Crown size={18} className="mr-2"/> {t('start7toSmoke')}</button><button onClick={handleStartTournament} className="bg-blue-700 hover:bg-blue-600 text-white py-3 rounded-xl font-bold flex items-center justify-center transition"><Trophy size={18} className="mr-2"/> {t('startTournament')}</button><button onClick={() => updateDoc(EVENT_DOC_REF, { callMode: 'single' })} className="bg-gray-700 hover:bg-gray-600 text-gray-300 py-2 rounded-xl text-sm font-medium mt-2">{t('resetMode')}</button></div></div>
+                    <button onClick={handleEndEvent} className="w-full py-3 text-red-400 border border-red-900/50 rounded-xl hover:bg-red-900/20">{t('endEventBtn')}</button>
+                </div>
+            );
+        };
+
+        const renderContent = () => {
+            if (event.callMode === '7tosmoke') return <SevenToSmokeUI />;
+            if (event.callMode === 'tournament') return <TournamentUI />;
+            if (activeTab === 'calling') return <CallingStatusTab />;
+            if (activeTab === 'checkin') return <CheckInTab />;
+            if (activeTab === 'progression') return <ProgressionTab />;
+            return <CallingStatusTab />;
+        };
+
         return (
-            <div className="p-4 text-white">
-                <h2 className="text-2xl mb-4">{event.name} - {t('manageTitle')}</h2>
-                <p className="text-gray-400 mb-4">請使用完整版 EventManager 程式碼以獲得所有管理功能</p>
-                <button onClick={()=>navigate('browse')} className="bg-gray-700 px-4 py-2 rounded">Back</button>
+            <div className="p-4 pb-24 space-y-4">
+                <button onClick={() => navigate('detail', event)} className="flex items-center text-gray-400 hover:text-white mb-4"><ChevronLeft size={24}/> {t('backToEvents')}</button>
+                <h2 className="text-2xl font-bold text-white">{event.name} - {t('manageTitle')}</h2>
+                <div className="flex bg-gray-800 rounded-xl overflow-hidden shadow-lg p-1">
+                    {[ {k:'calling',l:t('tabCalling'),i:Megaphone}, {k:'checkin',l:t('tabCheckIn'),i:ListChecks}, {k:'progression',l:t('tabProgression'),i:TrendingUp} ].map(tb => (
+                        <button key={tb.k} onClick={() => setActiveTab(tb.k)} className={`flex-1 py-3 text-xs font-bold rounded-lg flex flex-col justify-center items-center gap-1 transition ${activeTab===tb.k?'bg-gray-700 text-white shadow-sm':'text-gray-500 hover:text-gray-300'}`}><tb.i size={18}/>{tb.l}</button>
+                    ))}
+                </div>
+                <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-800">
+                    {renderContent()}
+                </div>
             </div>
         );
     };
@@ -934,7 +1099,7 @@ const App = () => {
     const BottomNav = () => (
         <div className="fixed bottom-0 left-0 right-0 bg-gray-900/90 backdrop-blur-md border-t border-gray-800 flex justify-around items-center p-2 pb-safe z-50 md:max-w-md md:mx-auto md:rounded-t-2xl">
             {[{n:t('navHome'),i:Grid,p:'browse'}, {n:t('navCreate'),i:PlusCircle,p:'create'}, {n:t('navMy'),i:User,p:'my_events'}, {n:t('navManage'),i:ClipboardList,p:'manage_list'}].map(i=>(
-                <button key={i.p} onClick={()=>navigate(i.p)} className={`flex flex-col items-center justify-center p-2 w-full transition active:scale-90 ${currentPage===i.p || (currentPage==='detail' && i.p==='browse') ?'text-red-500':'text-gray-500 hover:text-gray-300'}`}><i.i size={26} strokeWidth={currentPage===i.p ? 2.5 : 2}/><span className="text-[10px] mt-1 font-medium">{i.n}</span></button>
+                <button key={i.p} onClick={()=>navigate(i.p)} className={`flex flex-col items-center justify-center p-2 w-full transition active:scale-90 ${currentPage===i.p || (currentPage==='detail' && i.p==='browse') || (currentPage==='registerSuccess' && i.p==='browse') ?'text-red-500':'text-gray-500 hover:text-gray-300'}`}><i.i size={26} strokeWidth={currentPage===i.p ? 2.5 : 2}/><span className="text-[10px] mt-1 font-medium">{i.n}</span></button>
             ))}
         </div>
     );
@@ -942,7 +1107,7 @@ const App = () => {
     return (
         <div className="min-h-screen bg-black flex flex-col items-center text-sans">
             <div id="app" className="w-full max-w-md min-h-screen flex flex-col bg-gray-900 text-white shadow-2xl relative">
-                <header className="bg-gray-900/90 backdrop-blur-md text-white p-4 flex justify-between items-center sticky top-0 z-40 border-b border-gray-800"><h1 className="text-xl font-black tracking-tight flex items-center"><span className="text-red-600 mr-1 text-2xl">⚡</span> {t('appTitle')}</h1></header>
+                <header className="bg-gray-900/90 backdrop-blur-md text-white p-4 flex justify-between items-center sticky top-0 z-40 border-b border-gray-800"><h1 className="text-xl font-black tracking-tight flex items-center"><span className="text-red-600 mr-1 text-2xl">⚡</span> {t('appTitle')}</h1><div className="flex items-center gap-2 bg-gray-800 rounded-full px-3 py-1.5 border border-gray-700"><Globe size={14} className="text-gray-400"/><select value={lang} onChange={(e) => setLang(e.target.value)} className="bg-transparent text-xs text-gray-300 focus:outline-none cursor-pointer font-medium"><option value="zh-TW">繁體</option><option value="zh-CN">简中</option><option value="en">EN</option><option value="ja">JP</option><option value="ko">KR</option></select></div></header>
                 <main className="flex-grow overflow-y-auto overflow-x-hidden relative">{renderPage()}</main>
                 <BottomNav />
             </div>
