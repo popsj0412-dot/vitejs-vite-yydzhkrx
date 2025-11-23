@@ -2,13 +2,12 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction, collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
-// ✅ User 圖示改名為 UserIcon，避免衝突
-import { MapPin, Calendar, Users, PlusCircle, LayoutList, CheckCircle, ChevronLeft, Loader2, Megaphone, Settings, ListChecks, Shuffle, TrendingUp, XCircle, DollarSign, ExternalLink, CreditCard, Grid, Play, SkipForward, Hash, Globe, BellRing, Search, Star, Heart, Trophy, AlertCircle, Trash2, Sparkles, Flag, Crown, Swords, Timer, ClipboardList, User as UserIcon, LogOut, Mail, Lock, KeyRound, Copy, Bell, Zap, Dices, Edit, Save, Image as ImageIcon, Printer, FileText, X, Plus } from 'lucide-react';
+import { MapPin, Calendar, Users, PlusCircle, LayoutList, CheckCircle, ChevronLeft, Loader2, Megaphone, Settings, ListChecks, Shuffle, TrendingUp, XCircle, DollarSign, ExternalLink, CreditCard, Grid, Play, SkipForward, Hash, Globe, BellRing, Search, Star, Heart, Trophy, AlertCircle, Trash2, Sparkles, Flag, Crown, Swords, Timer, ClipboardList, User as UserIcon, LogOut, Mail, Lock, KeyRound, Copy, Bell, Zap, Dices, Edit, Save, Image as ImageIcon, Printer, FileText, X, Plus, AlertTriangle } from 'lucide-react';
 
 // --- App ID ---
 const appId = 'dance-event-demo-01'; 
 
-// --- Firebase 設定 (已填入您的金鑰) ---
+// --- Firebase 設定 ---
 const firebaseConfig = {
   apiKey: "AIzaSyC7sx5yZtUHYXbVtVTokmJbz5GS9U8aVtg",
   authDomain: "number-calling.firebaseapp.com",
@@ -22,22 +21,190 @@ const firebaseConfig = {
 // --- 初始化 Firebase ---
 let app, auth, db;
 try {
-  // 檢查 Config 是否有效
   if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("請填入")) {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
-    // 設定持久化
     setPersistence(auth, browserLocalPersistence).catch(console.error);
   } else {
-    console.warn("Firebase Config 錯誤！");
+    console.warn("Firebase Config Error!");
   }
 } catch (e) {
   console.error("Firebase Init Failed:", e);
 }
 
-// --- 翻譯字典 ---
+// --- 翻譯字典 (含 En, Zh-TW, Zh-CN, Ko, Ja) ---
 const translations = {
+    'en': { 
+        appTitle: "Dance Platform", 
+        loginTitle: "Login",
+        registerTitle: "Create Account",
+        emailPh: "Email",
+        passwordPh: "Password (min 6 chars)",
+        loginBtn: "Login",
+        registerBtn: "Register",
+        switchToRegister: "No account? Register here",
+        switchToLogin: "Have an account? Login here",
+        logout: "Logout",
+        welcome: "Welcome",
+        discoverEvents: "Explore",
+        createEventTitle: "Create Event",
+        manageTitle: "Event Dashboard",
+        featured: "Featured",
+        recommended: "Trending",
+        allEvents: "All Events",
+        allRegions: "All Regions",
+        allTimes: "All Times",
+        upcoming: "Upcoming",
+        past: "Past",
+        noEvents: "No events found.",
+        backToHome: "Back",
+        backToEvents: "Back to List",
+        time: "Time",
+        location: "Location",
+        description: "Description",
+        numberRange: "Range",
+        randomDraw: "Random",
+        openMap: "Map",
+        paymentInfoTitle: "Payment Info",
+        qrCode: "QR Code",
+        randomRegisterBtn: "Register (Wait for Draw)",
+        processing: "Processing...",
+        registered: "Registered",
+        waitingForDraw: "Waiting for Draw",
+        yourNumber: "Your #",
+        manageEventBtn: "Dashboard",
+        statusCheckedIn: "Checked In",
+        statusNotCheckedIn: "Not Checked In",
+        statusPaid: "Paid",
+        statusNotPaid: "Unpaid",
+        lane: "Lane",
+        congrats: "Success!",
+        successMsg: "Registration Successful",
+        rememberPayment: "Check payment & Check-in onsite.",
+        basicInfo: "Basic Info",
+        eventNamePh: "Event Name",
+        eventRegionPh: "Location",
+        mapLinkPh: "📍 Map Link",
+        bannerUrlPh: "🖼️ Banner URL",
+        descPh: "Description...",
+        eventFormatLabel: "Main Format",
+        categoriesLabel: "Categories",
+        addCategoryBtn: "Add",
+        categoryPh: "Category Name",
+        compSettingsTitle: "Track Config",
+        laneCountPh: "Lanes (A, B...)",
+        laneCapacityPh: "Max Players/Lane",
+        laneHint: "Total: {total} players",
+        paymentSettingsTitle: "Payment",
+        paymentDescPh: "Instructions...",
+        paymentQrPh: "🔗 QR URL",
+        roundConfigTitle: "Rounds",
+        roundConfigDesc: "Qualifiers per round",
+        addRound: "Add Round",
+        roundLabel: "Round",
+        qualifiersLabel: "Qualifiers",
+        publishBtn: "Publish",
+        tabCalling: "Call",
+        tabCheckIn: "CheckIn",
+        tabAssignment: "Draw",
+        tabProgression: "Rounds",
+        currentCall: "On Stage",
+        callStrategy: "Strategy",
+        mode: "Mode",
+        modeSingle: "Single",
+        modeAllLanes: "All Lanes",
+        callNext: "Next",
+        callNextBatch: "Next Batch",
+        randomAssignTitle: "Random Draw",
+        startDraw: "Start Draw",
+        drawing: "Drawing...",
+        drawWarning: "Warning: Re-assigns all numbers!",
+        generateDrawBtn: "Generate (Paid+In)",
+        drawStats: "Eligible: {n}",
+        navHome: "Home",
+        navCreate: "Create",
+        navMy: "My Events",
+        navManage: "Manage",
+        myEventsTitle: "My Registrations 🕺",
+        manageListTitle: "Hosted Events 🛠️",
+        noJoinedEvents: "No events joined",
+        noHostedEvents: "No events hosted",
+        enterManage: "Manage",
+        createSuccess: "✅ Created!",
+        createFail: "Failed",
+        registerProcessing: "Registering...",
+        registerFail: "Failed",
+        drawSuccess: "✅ Draw Done!",
+        callSuccess: "Called",
+        callFail: "Failed",
+        calculatingNext: "Calculating...",
+        noMorePlayers: "No players",
+        allLanesEmpty: "Empty",
+        called: "Called",
+        itsYourTurn: "Your Turn!",
+        pleaseGoToStage: "Go to stage!",
+        closeNotification: "OK",
+        searchPlaceholder: "Search...",
+        statsTotal: "Total",
+        statsCheckedIn: "In",
+        statsPaid: "Paid",
+        noResult: "No result",
+        progressionTitle: "Progression",
+        currentRound: "Current Round",
+        nextRoundTarget: "Target",
+        advanceManual: "Manual (Lane+Num)",
+        advanceManualPh: "e.g. A5",
+        advanceRandom: "Random",
+        advanceRandomCountPh: "Count",
+        advanceBtn: "Confirm",
+        endEventBtn: "End Event",
+        advancing: "Processing...",
+        advanceSuccess: "✅ Done",
+        advanceFail: "Failed",
+        qualifyAlertTitle: "Qualified!",
+        qualifyAlertMsg: "You made it!",
+        roundText: "Round {n}",
+        qualifiedStatus: "Qualified",
+        eliminatedStatus: "Out",
+        specialModesTitle: "Special Modes",
+        start7toSmoke: "Start 7 to Smoke",
+        startTournament: "Start Tournament",
+        smokeTitle: "7 to Smoke",
+        smokeKing: "King",
+        smokeChallenger: "Challenger",
+        smokeInLine: "Queue",
+        smokeWins: "Wins",
+        smokeWinBtn: "Win",
+        smokeReq: "Need 8",
+        tournTitle: "Tournament Bracket",
+        tournMatch: "Match",
+        tournWinnerBtn: "Winner",
+        tournReq: "Need even number",
+        resetMode: "Reset",
+        modeActive: "Active",
+        stageNamePh: "Stage Name",
+        selectCategory: "Select Category",
+        category: "Category",
+        printList: "Print / PDF",
+        printTitle: "List",
+        editEvent: "Edit",
+        deleteEvent: "Delete",
+        saveChanges: "Save",
+        cancelEdit: "Cancel",
+        deleteConfirm: "Delete event? Undone!",
+        endEventConfirm: "End event?",
+        updateSuccess: "✅ Updated",
+        deleteSuccess: "🗑️ Deleted",
+        eventEnded: "Event Ended",
+        enableNotify: "Notify Me",
+        notifyEnabled: "On",
+        notifyHint: "Allow notification",
+        wakelockActive: "Screen On",
+        formatStandard: "Standard",
+        format7toSmoke: "7 to Smoke",
+        formatTournament: "Tournament",
+    },
     'zh-TW': {
         appTitle: "舞蹈賽事平台",
         loginTitle: "登入平台",
@@ -91,10 +258,10 @@ const translations = {
         mapLinkPh: "📍 地圖連結 (可選)",
         bannerUrlPh: "🖼️ 活動封面圖片網址 (可選)",
         descPh: "活動描述...",
-        eventFormatLabel: "主要賽制 (Main Format)",
-        categoriesLabel: "比賽組別/風格 (Categories)",
+        eventFormatLabel: "主要賽制",
+        categoriesLabel: "比賽組別/風格",
         addCategoryBtn: "加入",
-        categoryPh: "輸入組別名稱 (例如: Hip Hop)",
+        categoryPh: "輸入組別名稱 (例如: Breaking)",
         compSettingsTitle: "賽事與賽道規格",
         laneCountPh: "賽道數量 (A, B...)",
         laneCapacityPh: "每賽道人數上限",
@@ -204,11 +371,520 @@ const translations = {
         notifyEnabled: "通知已開啟",
         notifyHint: "請允許通知以便接收叫號",
         wakelockActive: "螢幕恆亮中",
-        formatStandard: "標準淘汰賽 (Standard)",
-        format7toSmoke: "7 to Smoke (車輪戰)",
-        formatTournament: "Tournament (1 on 1)",
+        formatStandard: "標準淘汰賽",
+        format7toSmoke: "7 to Smoke",
+        formatTournament: "Tournament",
     },
-    'en': { appTitle: "Dance Platform" } 
+    'zh-CN': {
+        appTitle: "舞蹈赛事平台",
+        loginTitle: "登录平台",
+        registerTitle: "注册账号",
+        emailPh: "电子邮箱",
+        passwordPh: "密码 (至少6位)",
+        loginBtn: "登录",
+        registerBtn: "注册新账号",
+        switchToRegister: "还没有账号？点此注册",
+        switchToLogin: "已有账号？点此登录",
+        logout: "退出",
+        welcome: "欢迎回来",
+        discoverEvents: "探索赛事",
+        createEventTitle: "发布新赛事 📝",
+        manageTitle: "赛事中控台",
+        featured: "精选赛事",
+        recommended: "热门推荐",
+        allEvents: "所有赛事",
+        allRegions: "所有地区",
+        allTimes: "所有时间",
+        upcoming: "即将到来",
+        past: "已结束",
+        noEvents: "目前没有符合条件的活动。",
+        backToHome: "返回",
+        backToEvents: "返回列表",
+        time: "时间",
+        location: "地点",
+        description: "描述",
+        numberRange: "号码范围",
+        randomDraw: "随机抽取",
+        openMap: "开启地图",
+        paymentInfoTitle: "缴费信息",
+        qrCode: "收款码",
+        randomRegisterBtn: "报名参赛",
+        processing: "处理中...",
+        registered: "已报名",
+        waitingForDraw: "待抽签分配",
+        yourNumber: "您的编号",
+        manageEventBtn: "进入中控台",
+        statusCheckedIn: "已报到",
+        statusNotCheckedIn: "未报到",
+        statusPaid: "已缴费",
+        statusNotPaid: "未缴费",
+        lane: "赛道",
+        congrats: "报名成功！",
+        successMsg: "您已成功登记参加",
+        rememberPayment: "请记得查看缴费信息并前往现场报到。",
+        basicInfo: "基本信息",
+        eventNamePh: "活动名称",
+        eventRegionPh: "地点/地区",
+        mapLinkPh: "📍 地图链接 (可选)",
+        bannerUrlPh: "🖼️ 活动封面图片网址 (可选)",
+        descPh: "活动描述...",
+        eventFormatLabel: "主要赛制",
+        categoriesLabel: "比赛组别/风格",
+        addCategoryBtn: "加入",
+        categoryPh: "输入组别名称 (例如: Breaking)",
+        compSettingsTitle: "赛事与赛道规格",
+        laneCountPh: "赛道数量 (A, B...)",
+        laneCapacityPh: "每赛道人数上限",
+        laneHint: "总赛道: A ~ {lastChar} | 总名额: {total} 人",
+        paymentSettingsTitle: "缴费设定",
+        paymentDescPh: "缴费说明...",
+        paymentQrPh: "🔗 收款码图片链接 (可选)",
+        roundConfigTitle: "赛制轮次规划",
+        roundConfigDesc: "设定每一轮预计晋级的人数",
+        addRound: "新增轮次",
+        roundLabel: "轮次",
+        qualifiersLabel: "晋级人数",
+        publishBtn: "发布活动",
+        tabCalling: "叫号",
+        tabCheckIn: "报到/名单",
+        tabAssignment: "抽签", 
+        tabProgression: "晋级",
+        currentCall: "目前舞台",
+        callStrategy: "叫号设定",
+        mode: "模式",
+        modeSingle: "单人",
+        modeAllLanes: "赛道齐发",
+        callNext: "叫下一位",
+        callNextBatch: "叫下一批",
+        randomAssignTitle: "随机分道抽签",
+        startDraw: "开始抽签",
+        drawing: "抽签中...",
+        drawWarning: "警告：这将重新分配所有「已报到+已缴费」选手的号码！",
+        generateDrawBtn: "生成号码 (仅限已报到+已缴费)",
+        drawStats: "符合资格：{n} 人",
+        navHome: "首页",
+        navCreate: "发布",
+        navMy: "我的",
+        navManage: "管理",
+        myEventsTitle: "我的参赛记录 🕺",
+        manageListTitle: "我主办的活动 🛠️",
+        noJoinedEvents: "尚未报名任何活动",
+        noHostedEvents: "尚未创建任何活动",
+        enterManage: "管理",
+        createSuccess: "✅ 发布成功！",
+        createFail: "发布失败",
+        registerProcessing: "报名中...",
+        registerFail: "报名失败",
+        drawSuccess: "✅ 抽签完成！",
+        callSuccess: "叫号成功",
+        callFail: "叫号失败",
+        calculatingNext: "计算中...",
+        noMorePlayers: "无待叫选手。",
+        allLanesEmpty: "全赛道无人。",
+        called: "已叫号",
+        itsYourTurn: "轮到你了！",
+        pleaseGoToStage: "请立即前往舞台！",
+        closeNotification: "收到",
+        searchPlaceholder: "搜索 姓名/号码...",
+        statsTotal: "总数",
+        statsCheckedIn: "已到",
+        statsPaid: "已付",
+        noResult: "找不到资料",
+        progressionTitle: "晋级管理",
+        currentRound: "当前轮次",
+        nextRoundTarget: "下一轮目标",
+        advanceManual: "手动晋级 (赛道+号码)",
+        advanceManualPh: "例如: A5, B12",
+        advanceRandom: "随机抽选晋级",
+        advanceRandomCountPh: "晋级人数",
+        advanceBtn: "确认晋级",
+        endEventBtn: "结束活动",
+        advancing: "处理中...",
+        advanceSuccess: "✅ 晋级成功！",
+        advanceFail: "失败",
+        qualifyAlertTitle: "恭喜晋级！",
+        qualifyAlertMsg: "你已成功晋级到下一轮！",
+        roundText: "第 {n} 轮",
+        qualifiedStatus: "晋级",
+        eliminatedStatus: "止步",
+        specialModesTitle: "特殊赛制 (晋级后)",
+        start7toSmoke: "启动 7 to Smoke",
+        startTournament: "启动 Tournament",
+        smokeTitle: "7 to Smoke",
+        smokeKing: "King",
+        smokeChallenger: "Challenger",
+        smokeInLine: "排队中",
+        smokeWins: "胜",
+        smokeWinBtn: "胜",
+        smokeReq: "需正好 8 人晋级",
+        tournTitle: "Tournament 对战表",
+        tournMatch: "对战",
+        tournWinnerBtn: "获胜",
+        tournReq: "需偶数人 (2, 4, 8...)",
+        resetMode: "重置为标准叫号",
+        modeActive: "进行中",
+        stageNamePh: "舞台名称 (Stage Name)",
+        selectCategory: "选择参赛项目",
+        category: "项目",
+        printList: "打印名单 / 下载 PDF",
+        printTitle: "参赛者名单",
+        editEvent: "编辑",
+        deleteEvent: "删除",
+        saveChanges: "储存",
+        cancelEdit: "取消",
+        deleteConfirm: "确定要删除此活动？无法复原！",
+        endEventConfirm: "确定要结束活动？结束后无法再叫号。",
+        updateSuccess: "✅ 更新成功",
+        deleteSuccess: "🗑️ 已删除",
+        eventEnded: "活动已结束",
+        enableNotify: "开启通知",
+        notifyEnabled: "通知已开启",
+        notifyHint: "请允许通知以便接收叫号",
+        wakelockActive: "屏幕常亮中",
+        formatStandard: "标准淘汰赛",
+        format7toSmoke: "7 to Smoke",
+        formatTournament: "Tournament",
+    },
+    'ko': {
+        appTitle: "댄스 플랫폼",
+        loginTitle: "로그인",
+        registerTitle: "회원가입",
+        emailPh: "이메일",
+        passwordPh: "비밀번호 (6자 이상)",
+        loginBtn: "로그인",
+        registerBtn: "회원가입",
+        switchToRegister: "계정이 없으신가요? 가입하기",
+        switchToLogin: "이미 계정이 있으신가요? 로그인",
+        logout: "로그아웃",
+        welcome: "환영합니다",
+        discoverEvents: "이벤트 탐색",
+        createEventTitle: "새 이벤트 만들기 📝",
+        manageTitle: "이벤트 관리",
+        featured: "추천 이벤트",
+        recommended: "인기",
+        allEvents: "모든 이벤트",
+        allRegions: "모든 지역",
+        allTimes: "모든 시간",
+        upcoming: "예정됨",
+        past: "지난 이벤트",
+        noEvents: "이벤트를 찾을 수 없습니다.",
+        backToHome: "뒤로",
+        backToEvents: "목록으로 돌아가기",
+        time: "시간",
+        location: "장소",
+        description: "설명",
+        numberRange: "번호 범위",
+        randomDraw: "무작위 추첨",
+        openMap: "지도 열기",
+        paymentInfoTitle: "결제 정보",
+        qrCode: "QR 코드",
+        randomRegisterBtn: "참가 신청 (추첨 대기)",
+        processing: "처리 중...",
+        registered: "신청 완료",
+        waitingForDraw: "추첨 대기 중...",
+        yourNumber: "내 번호",
+        manageEventBtn: "관리자 대시보드",
+        statusCheckedIn: "체크인 완료",
+        statusNotCheckedIn: "체크인 전",
+        statusPaid: "결제 완료",
+        statusNotPaid: "미결제",
+        lane: "레인",
+        congrats: "성공!",
+        successMsg: "참가 신청이 완료되었습니다",
+        rememberPayment: "결제 정보를 확인하고 현장에서 체크인해주세요.",
+        basicInfo: "기본 정보",
+        eventNamePh: "이벤트 이름",
+        eventRegionPh: "장소/지역",
+        mapLinkPh: "📍 지도 링크 (선택)",
+        bannerUrlPh: "🖼️ 배너 이미지 URL (선택)",
+        descPh: "설명...",
+        eventFormatLabel: "메인 포맷",
+        categoriesLabel: "카테고리/장르 (콤마로 구분)",
+        addCategoryBtn: "추가",
+        categoryPh: "카테고리 이름 (예: Breaking)",
+        compSettingsTitle: "대회 설정",
+        laneCountPh: "레인 수 (A, B...)",
+        laneCapacityPh: "레인 당 최대 인원",
+        laneHint: "총 레인: A ~ {lastChar} | 총 인원: {total} 명",
+        paymentSettingsTitle: "결제 설정",
+        paymentDescPh: "결제 안내...",
+        paymentQrPh: "🔗 QR 코드 이미지 링크 (선택)",
+        roundConfigTitle: "라운드 설정",
+        roundConfigDesc: "라운드 별 진출 인원",
+        addRound: "라운드 추가",
+        roundLabel: "라운드",
+        qualifiersLabel: "진출 인원",
+        publishBtn: "게시하기",
+        tabCalling: "호명",
+        tabCheckIn: "체크인",
+        tabAssignment: "추첨", 
+        tabProgression: "진출 관리",
+        currentCall: "현재 무대",
+        callStrategy: "호명 설정",
+        mode: "모드",
+        modeSingle: "단일",
+        modeAllLanes: "전체 레인",
+        callNext: "다음 호명",
+        callNextBatch: "다음 그룹 호명",
+        randomAssignTitle: "무작위 레인 배정",
+        startDraw: "추첨 시작",
+        drawing: "추첨 중...",
+        drawWarning: "주의: 모든 참가자의 번호가 재배정됩니다!",
+        generateDrawBtn: "번호 생성 (체크인+결제 완료자만)",
+        drawStats: "자격 있음: {n} 명",
+        navHome: "홈",
+        navCreate: "생성",
+        navMy: "내 이벤트",
+        navManage: "관리",
+        myEventsTitle: "내 참가 내역 🕺",
+        manageListTitle: "내가 주최한 이벤트 🛠️",
+        noJoinedEvents: "참가한 이벤트가 없습니다",
+        noHostedEvents: "주최한 이벤트가 없습니다",
+        enterManage: "관리",
+        createSuccess: "✅ 생성되었습니다!",
+        createFail: "실패",
+        registerProcessing: "신청 중...",
+        registerFail: "신청 실패",
+        drawSuccess: "✅ 추첨 완료!",
+        callSuccess: "호명 성공",
+        callFail: "호명 실패",
+        calculatingNext: "계산 중...",
+        noMorePlayers: "대기 중인 참가자가 없습니다.",
+        allLanesEmpty: "모든 레인이 비었습니다.",
+        called: "호명됨",
+        itsYourTurn: "당신의 차례입니다!",
+        pleaseGoToStage: "무대로 이동해주세요!",
+        closeNotification: "확인",
+        searchPlaceholder: "이름/번호 검색...",
+        statsTotal: "총원",
+        statsCheckedIn: "체크인",
+        statsPaid: "결제",
+        noResult: "결과 없음",
+        progressionTitle: "진출 관리",
+        currentRound: "현재 라운드",
+        nextRoundTarget: "다음 목표",
+        advanceManual: "수동 진출 (레인+번호)",
+        advanceManualPh: "예: A5, B12",
+        advanceRandom: "무작위 진출",
+        advanceRandomCountPh: "인원 수",
+        advanceBtn: "확인",
+        endEventBtn: "이벤트 종료",
+        advancing: "처리 중...",
+        advanceSuccess: "✅ 완료!",
+        advanceFail: "실패",
+        qualifyAlertTitle: "진출 축하합니다!",
+        qualifyAlertMsg: "다음 라운드로 진출하셨습니다!",
+        roundText: "{n} 라운드",
+        qualifiedStatus: "진출",
+        eliminatedStatus: "탈락",
+        specialModesTitle: "특별 모드",
+        start7toSmoke: "7 to Smoke 시작",
+        startTournament: "토너먼트 시작",
+        smokeTitle: "7 to Smoke",
+        smokeKing: "King",
+        smokeChallenger: "Challenger",
+        smokeInLine: "대기열",
+        smokeWins: "승",
+        smokeWinBtn: "승리",
+        smokeReq: "정확히 8명 필요",
+        tournTitle: "토너먼트 대진표",
+        tournMatch: "매치",
+        tournWinnerBtn: "승리",
+        tournReq: "짝수 인원 필요 (2, 4, 8...)",
+        resetMode: "초기화",
+        modeActive: "진행 중",
+        stageNamePh: "댄서 네임 (Stage Name)",
+        selectCategory: "참가 부문 선택",
+        category: "부문",
+        printList: "명단 인쇄 / PDF",
+        printTitle: "참가자 명단",
+        editEvent: "수정",
+        deleteEvent: "삭제",
+        saveChanges: "저장",
+        cancelEdit: "취소",
+        deleteConfirm: "정말 삭제하시겠습니까? 되돌릴 수 없습니다!",
+        endEventConfirm: "이벤트를 종료하시겠습니까? 더 이상 호명할 수 없습니다.",
+        updateSuccess: "✅ 업데이트됨",
+        deleteSuccess: "🗑️ 삭제됨",
+        eventEnded: "이벤트 종료됨",
+        enableNotify: "알림 켜기",
+        notifyEnabled: "알림 켜짐",
+        notifyHint: "호명 알림을 받으려면 허용해주세요",
+        wakelockActive: "화면 켜짐 유지",
+        formatStandard: "표준 토너먼트",
+        format7toSmoke: "7 to Smoke",
+        formatTournament: "토너먼트",
+    },
+    'ja': {
+        appTitle: "ダンスプラットフォーム",
+        loginTitle: "ログイン",
+        registerTitle: "アカウント作成",
+        emailPh: "メールアドレス",
+        passwordPh: "パスワード (6文字以上)",
+        loginBtn: "ログイン",
+        registerBtn: "登録",
+        switchToRegister: "アカウントをお持ちでないですか？登録",
+        switchToLogin: "すでにアカウントをお持ちですか？ログイン",
+        logout: "ログアウト",
+        welcome: "ようこそ",
+        discoverEvents: "イベントを探す",
+        createEventTitle: "イベント作成 📝",
+        manageTitle: "イベント管理",
+        featured: "おすすめ",
+        recommended: "トレンド",
+        allEvents: "すべてのイベント",
+        allRegions: "すべての地域",
+        allTimes: "すべての時間",
+        upcoming: "開催予定",
+        past: "終了",
+        noEvents: "イベントが見つかりません。",
+        backToHome: "戻る",
+        backToEvents: "リストに戻る",
+        time: "時間",
+        location: "場所",
+        description: "説明",
+        numberRange: "番号範囲",
+        randomDraw: "ランダム抽選",
+        openMap: "地図を開く",
+        paymentInfoTitle: "支払い情報",
+        qrCode: "QRコード",
+        randomRegisterBtn: "エントリー (抽選待ち)",
+        processing: "処理中...",
+        registered: "エントリー済み",
+        waitingForDraw: "抽選待ち...",
+        yourNumber: "あなたの番号",
+        manageEventBtn: "管理ダッシュボード",
+        statusCheckedIn: "受付済",
+        statusNotCheckedIn: "未受付",
+        statusPaid: "支払済",
+        statusNotPaid: "未払",
+        lane: "レーン",
+        congrats: "成功！",
+        successMsg: "エントリー完了",
+        rememberPayment: "支払い情報を確認し、現地で受付を行ってください。",
+        basicInfo: "基本情報",
+        eventNamePh: "イベント名",
+        eventRegionPh: "場所/地域",
+        mapLinkPh: "📍 地図リンク (任意)",
+        bannerUrlPh: "🖼️ バナー画像URL (任意)",
+        descPh: "説明...",
+        eventFormatLabel: "メインフォーマット",
+        categoriesLabel: "カテゴリー/ジャンル (カンマ区切り)",
+        addCategoryBtn: "追加",
+        categoryPh: "カテゴリー名 (例: Breaking)",
+        compSettingsTitle: "大会設定",
+        laneCountPh: "レーン数 (A, B...)",
+        laneCapacityPh: "レーンごとの最大人数",
+        laneHint: "総レーン: A ~ {lastChar} | 総定員: {total} 人",
+        paymentSettingsTitle: "支払い設定",
+        paymentDescPh: "支払い説明...",
+        paymentQrPh: "🔗 QRコード画像URL (任意)",
+        roundConfigTitle: "ラウンド設定",
+        roundConfigDesc: "ラウンドごとの通過人数",
+        addRound: "ラウンド追加",
+        roundLabel: "ラウンド",
+        qualifiersLabel: "通過人数",
+        publishBtn: "公開",
+        tabCalling: "呼び出し",
+        tabCheckIn: "受付",
+        tabAssignment: "抽選", 
+        tabProgression: "進行",
+        currentCall: "現在ステージ",
+        callStrategy: "呼び出し設定",
+        mode: "モード",
+        modeSingle: "シングル",
+        modeAllLanes: "全レーン",
+        callNext: "次へ",
+        callNextBatch: "次のグループ",
+        randomAssignTitle: "ランダムレーン割り当て",
+        startDraw: "抽選開始",
+        drawing: "抽選中...",
+        drawWarning: "警告: すべての参加者の番号が再割り当てされます！",
+        generateDrawBtn: "番号生成 (受付+支払済のみ)",
+        drawStats: "対象: {n} 人",
+        navHome: "ホーム",
+        navCreate: "作成",
+        navMy: "マイイベント",
+        navManage: "管理",
+        myEventsTitle: "エントリー履歴 🕺",
+        manageListTitle: "主催イベント 🛠️",
+        noJoinedEvents: "エントリーしたイベントはありません",
+        noHostedEvents: "主催したイベントはありません",
+        enterManage: "管理",
+        createSuccess: "✅ 作成しました！",
+        createFail: "失敗",
+        registerProcessing: "登録中...",
+        registerFail: "失敗",
+        drawSuccess: "✅ 抽選完了！",
+        callSuccess: "呼び出し成功",
+        callFail: "呼び出し失敗",
+        calculatingNext: "計算中...",
+        noMorePlayers: "待機中の参加者はいません。",
+        allLanesEmpty: "すべてのレーンが空です。",
+        called: "呼び出し済み",
+        itsYourTurn: "あなたの番です！",
+        pleaseGoToStage: "ステージへ移動してください！",
+        closeNotification: "OK",
+        searchPlaceholder: "検索 (名前/番号)...",
+        statsTotal: "合計",
+        statsCheckedIn: "受付",
+        statsPaid: "支払",
+        noResult: "見つかりません",
+        progressionTitle: "進行管理",
+        currentRound: "現在ラウンド",
+        nextRoundTarget: "次ラウンド目標",
+        advanceManual: "手動通過 (レーン+番号)",
+        advanceManualPh: "例: A5, B12",
+        advanceRandom: "ランダム通過",
+        advanceRandomCountPh: "人数",
+        advanceBtn: "確定",
+        endEventBtn: "イベント終了",
+        advancing: "処理中...",
+        advanceSuccess: "✅ 完了！",
+        advanceFail: "失敗",
+        qualifyAlertTitle: "おめでとうございます！",
+        qualifyAlertMsg: "次のラウンドへ進出しました！",
+        roundText: "ラウンド {n}",
+        qualifiedStatus: "通過",
+        eliminatedStatus: "敗退",
+        specialModesTitle: "特別モード",
+        start7toSmoke: "7 to Smoke 開始",
+        startTournament: "トーナメント開始",
+        smokeTitle: "7 to Smoke",
+        smokeKing: "King",
+        smokeChallenger: "Challenger",
+        smokeInLine: "待機中",
+        smokeWins: "勝",
+        smokeWinBtn: "勝利",
+        smokeReq: "ちょうど8人の通過者が必要です",
+        tournTitle: "トーナメント表",
+        tournMatch: "マッチ",
+        tournWinnerBtn: "勝利",
+        tournReq: "偶数人数が必要です (2, 4, 8...)",
+        resetMode: "リセット",
+        modeActive: "進行中",
+        stageNamePh: "ダンサー名 (Stage Name)",
+        selectCategory: "カテゴリー選択",
+        category: "カテゴリー",
+        printList: "リスト印刷 / PDF",
+        printTitle: "参加者リスト",
+        editEvent: "編集",
+        deleteEvent: "削除",
+        saveChanges: "保存",
+        cancelEdit: "キャンセル",
+        deleteConfirm: "本当に削除しますか？元に戻せません！",
+        endEventConfirm: "イベントを終了しますか？呼び出しができなくなります。",
+        updateSuccess: "✅ 更新しました",
+        deleteSuccess: "🗑️ 削除しました",
+        eventEnded: "イベント終了",
+        enableNotify: "通知ON",
+        notifyEnabled: "通知が有効です",
+        notifyHint: "呼び出し通知を受け取るには許可してください",
+        wakelockActive: "画面常時点灯",
+        formatStandard: "標準 (Standard)",
+        format7toSmoke: "7 to Smoke",
+        formatTournament: "トーナメント",
+    }
 };
 
 const formatNumber = (num) => num > 0 ? num.toString().padStart(3, '0') : '--';
@@ -231,7 +907,9 @@ const App = () => {
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [loading, setLoading] = useState(true);
     const [systemMessage, setSystemMessage] = useState('');
-    const [lang, setLang] = useState('zh-TW');
+    
+    // ✅ 修改：預設語言改為英文 'en'
+    const [lang, setLang] = useState('en');
 
     const [authEmail, setAuthEmail] = useState('');
     const [authPassword, setAuthPassword] = useState('');
@@ -243,23 +921,27 @@ const App = () => {
     const [events, setEvents] = useState([]);
     const [myRegistrations, setMyRegistrations] = useState([]);
 
-    const t = (key) => translations[lang]?.[key] || translations['zh-TW'][key] || key;
+    // Fallback to 'en' if translation missing
+    const t = (key) => translations[lang]?.[key] || translations['en'][key] || key;
 
     // --- Firebase 狀態監聽 ---
     useEffect(() => {
         if (!auth) {
-            setSystemMessage("初始化失敗: 尚未連線至 Firebase");
+            setSystemMessage("Firebase 初始化失敗，請檢查 Config");
             setLoading(false);
             return;
         }
 
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            // 移除匿名帳號邏輯，只允許正式帳號
-            setUser(currentUser);
+            if (currentUser && currentUser.isAnonymous) {
+                await signOut(auth);
+                setUser(null);
+            } else {
+                setUser(currentUser);
+            }
             setIsAuthReady(true);
             setLoading(false);
-            
-            if (currentUser) {
+            if (currentUser && !currentUser.isAnonymous) {
                 setAuthEmail('');
                 setAuthPassword('');
             }
@@ -274,20 +956,19 @@ const App = () => {
         try {
             if (isRegisteringMode) {
                 await createUserWithEmailAndPassword(auth, authEmail, authPassword);
-                setSystemMessage("註冊成功！");
+                setSystemMessage("Registered successfully!");
             } else {
-                // 登入前設定持久化
                 await setPersistence(auth, browserLocalPersistence);
                 await signInWithEmailAndPassword(auth, authEmail, authPassword);
-                setSystemMessage("登入成功！");
+                setSystemMessage("Logged in successfully!");
             }
         } catch (error) {
             console.error(error);
             let msg = error.message;
-            if(error.code === 'auth/invalid-email') msg = "Email 格式錯誤";
-            if(error.code === 'auth/wrong-password') msg = "密碼錯誤";
-            if(error.code === 'auth/user-not-found') msg = "找不到使用者";
-            if(error.code === 'auth/email-already-in-use') msg = "Email 已被註冊";
+            if(error.code === 'auth/invalid-email') msg = "Invalid Email";
+            if(error.code === 'auth/wrong-password') msg = "Wrong Password";
+            if(error.code === 'auth/user-not-found') msg = "User not found";
+            if(error.code === 'auth/email-already-in-use') msg = "Email already in use";
             setSystemMessage(msg);
         }
     };
@@ -299,7 +980,7 @@ const App = () => {
             setUser(null);
             setMyRegistrations([]); 
             navigate('browse');
-            setSystemMessage("已登出");
+            setSystemMessage("Logged out");
         } catch (error) {
             console.error("Logout failed:", error);
         }
@@ -315,7 +996,6 @@ const App = () => {
             const fetchedEvents = querySnapshot.docs.map(doc => ({ 
                 id: doc.id, 
                 ...doc.data(), 
-                // 確保欄位存在
                 categories: doc.data().categories || ['Standard'],
                 laneCount: doc.data().laneCount || 4,
                 laneCapacity: doc.data().laneCapacity || 50, 
@@ -398,9 +1078,11 @@ const App = () => {
                         <div className="flex items-center gap-2 bg-gray-800 rounded-full px-3 py-1.5 border border-gray-700">
                             <Globe size={14} className="text-gray-400"/>
                             <select value={lang} onChange={(e) => setLang(e.target.value)} className="bg-transparent text-xs text-gray-300 focus:outline-none cursor-pointer font-medium">
-                                <option value="en">EN</option>
-                                <option value="zh-TW">繁體</option>
-                                <option value="zh-CN">简中</option>
+                                <option value="en">English</option>
+                                <option value="zh-TW">繁體中文</option>
+                                <option value="zh-CN">简体中文</option>
+                                <option value="ko">한국어</option>
+                                <option value="ja">日本語</option>
                             </select>
                         </div>
                     </div>
@@ -410,9 +1092,10 @@ const App = () => {
         );
     }
 
-    // --- 頁面組件 ---
+    // ... (EventList, EventDetail, etc. - 邏輯相同，僅翻譯部分透過 t() 自動切換)
+    // 為了節省篇幅，以下組件邏輯與之前相同，僅需確保使用 t() 函數即可
+    // 這裡直接包含完整組件以確保複製貼上後能運作
 
-    // 1. 首頁 (EventList)
     const EventList = () => {
         const [filterRegion, setFilterRegion] = useState('');
         const [filterTime, setFilterTime] = useState('');
@@ -441,6 +1124,8 @@ const App = () => {
                                 <option value="en">EN</option>
                                 <option value="zh-TW">繁體</option>
                                 <option value="zh-CN">简中</option>
+                                <option value="ko">KR</option>
+                                <option value="ja">JP</option>
                             </select>
                         </div>
                         <button onClick={handleLogout} className="text-xs text-gray-500 hover:text-red-400 flex items-center"><LogOut size={12} className="mr-1"/> {t('logout')}</button>
@@ -489,7 +1174,6 @@ const App = () => {
         );
     };
 
-    // 2. 活動詳情與報名 (EventDetail)
     const EventDetail = ({ event }) => {
         if (!event) return <div className="p-8 text-center text-white"><Loader2 className="animate-spin mx-auto mb-2"/> Loading...</div>;
 
@@ -807,34 +1491,7 @@ const App = () => {
         );
     };
 
-    // 3. 報名成功畫面 (RegistrationSuccess) ... (保持不變)
-    const RegistrationSuccess = ({ event }) => (
-        <div className="p-8 flex flex-col items-center justify-center min-h-[70vh] text-center space-y-8">
-            <div className="relative"><div className="absolute inset-0 bg-green-500/30 blur-3xl rounded-full"></div><CheckCircle size={100} className="text-green-500 relative z-10 animate-bounce"/></div>
-            <div><h2 className="text-4xl font-black text-white mb-2">{t('congrats')}</h2><p className="text-gray-400">{t('successMsg')} <span className="text-white font-bold">{event.name}</span></p></div>
-            <div className="bg-gray-800 p-8 rounded-3xl shadow-2xl w-full border border-gray-700">
-                {event.laneAssignment ? (
-                    <>
-                        <p className="text-gray-400 text-sm uppercase tracking-widest mb-2">{t('yourNumber')}</p>
-                        <div className="flex justify-center items-baseline text-white font-black tracking-widest">
-                            <span className="text-7xl text-indigo-400">{event.laneAssignment}</span>
-                            <span className="text-5xl mx-2">-</span>
-                            <span className="text-8xl">{formatNumber(event.queueNumber)}</span>
-                        </div>
-                    </>
-                ) : (
-                    <div className="py-4">
-                        <div className="text-yellow-400 text-xl font-bold mb-2">{t('waitingForDraw')}</div>
-                        <p className="text-gray-400 text-sm">請先完成報到手續，主辦單位將在報名截止後進行抽籤分組。</p>
-                    </div>
-                )}
-                <div className="mt-6 pt-6 border-t border-gray-700/50"><p className="text-sm text-yellow-500 font-medium flex items-center justify-center"><CreditCard size={14} className="mr-2"/> {t('rememberPayment')}</p></div>
-            </div>
-            <button onClick={() => navigate('browse')} className="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 rounded-2xl transition">{t('backToHome')}</button>
-        </div>
-    );
-
-    // 4. 創建活動頁面 (CreateEventForm) ... (保持不變)
+    // 3. 創建活動 (含 Tag 系統)
     const CreateEventForm = () => {
         const [formData, setFormData] = useState({
             name: '', date: '', region: '', description: '', 
@@ -873,7 +1530,7 @@ const App = () => {
                 setSystemMessage(`${t('createFail')}: ${error.message}`); setIsSubmitting(false);
             }
         };
-
+        
         const addCategory = () => {
             if(catInput.trim()) {
                 setCategories([...categories, catInput.trim()]);
@@ -892,18 +1549,18 @@ const App = () => {
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="bg-gray-800 p-5 rounded-3xl border border-gray-700 shadow-lg space-y-4">
                         <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">{t('basicInfo')}</h3>
-                        <input type="text" name="name" placeholder={t('eventNamePh')} value={formData.name} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
-                        <div><label className="block text-gray-500 text-xs mb-2">{t('eventFormatLabel')}</label><select name="initialFormat" value={formData.initialFormat} onChange={handleChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none appearance-none"><option value="standard">{t('formatStandard')}</option><option value="7tosmoke">{t('format7toSmoke')}</option><option value="tournament">{t('formatTournament')}</option></select></div>
-                        <input type="datetime-local" name="date" value={formData.date} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
-                        <input type="text" name="region" placeholder={t('eventRegionPh')} value={formData.region} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
-                        <input type="text" name="bannerUrl" placeholder={t('bannerUrlPh')} value={formData.bannerUrl} onChange={handleChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
-                        <textarea name="description" placeholder={t('descPh')} value={formData.description} onChange={handleChange} rows="3" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
+                        <input type="text" name="name" placeholder={t('eventNamePh')} value={formData.name} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
+                        <div><label className="block text-gray-500 text-xs mb-2">{t('eventFormatLabel')}</label><select name="initialFormat" value={formData.initialFormat} onChange={handleChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition appearance-none"><option value="standard">{t('formatStandard')}</option><option value="7tosmoke">{t('format7toSmoke')}</option><option value="tournament">{t('formatTournament')}</option></select></div>
+                        <input type="datetime-local" name="date" value={formData.date} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
+                        <input type="text" name="region" placeholder={t('eventRegionPh')} value={formData.region} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
+                        <input type="text" name="bannerUrl" placeholder={t('bannerUrlPh')} value={formData.bannerUrl} onChange={handleChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
+                        <textarea name="description" placeholder={t('descPh')} value={formData.description} onChange={handleChange} rows="3" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
                     </div>
                     <div className="bg-gray-800 p-5 rounded-3xl border border-gray-700 shadow-lg space-y-4">
                         <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">{t('compSettingsTitle')}</h3>
                         <div className="grid grid-cols-2 gap-4">
                             <div><label className="block text-gray-500 text-xs mb-2">{t('laneCountPh')}</label><select value={getLaneName(formData.laneCount - 1)} onChange={handleLaneLetterChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition appearance-none">{alphabetOptions.map((letter, idx) => (<option key={letter} value={letter}>{letter} ({idx + 1} Lane{idx > 0 ? 's' : ''})</option>))}</select></div>
-                            <div><label className="block text-gray-500 text-xs mb-2">{t('laneCapacityPh')}</label><input type="number" name="laneCapacity" placeholder="50" value={formData.laneCapacity} onChange={handleChange} min="1" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/></div>
+                            <div><label className="block text-gray-500 text-xs mb-2">{t('laneCapacityPh')}</label><input type="number" name="laneCapacity" placeholder="50" value={formData.laneCapacity} onChange={handleChange} min="1" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/></div>
                         </div>
                         
                         {/* Tag Input System */}
@@ -924,8 +1581,8 @@ const App = () => {
                     </div>
                     <div className="bg-gray-800 p-5 rounded-3xl border border-gray-700 shadow-lg space-y-4">
                         <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">{t('paymentSettingsTitle')}</h3>
-                        <textarea name="paymentInfo" placeholder={t('paymentDescPh')} value={formData.paymentInfo} onChange={handleChange} rows="3" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
-                        <input type="text" name="paymentQrCodeUrl" placeholder={t('paymentQrPh')} value={formData.paymentQrCodeUrl} onChange={handleChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
+                        <textarea name="paymentInfo" placeholder={t('paymentDescPh')} value={formData.paymentInfo} onChange={handleChange} rows="3" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
+                        <input type="text" name="paymentQrCodeUrl" placeholder={t('paymentQrPh')} value={formData.paymentQrCodeUrl} onChange={handleChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
                     </div>
                     <button type="submit" disabled={isSubmitting} className="w-full bg-red-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition flex items-center justify-center text-lg">{isSubmitting ? <Loader2 className="animate-spin" size={24} /> : t('publishBtn')}</button>
                 </form>
@@ -945,7 +1602,6 @@ const App = () => {
                     <div className="space-y-3">
                         {myJoinedEvents.map(event => {
                              const reg = myRegistrations.find(r => r.eventId === event.id);
-                             if (!reg) return null;
                              return (
                                 <div key={event.id} onClick={() => navigate('detail', event)} className="bg-gray-800 p-4 rounded-2xl border border-gray-700 cursor-pointer active:bg-gray-700 transition">
                                     <div className="flex justify-between items-center mb-2">
@@ -970,7 +1626,6 @@ const App = () => {
         );
     };
 
-    // 5. Management List
     const ManagementList = () => {
         // ✅ 安全檢查：如果 user 不存在，直接回傳 null，防止白畫面
         if (!user) return null;
@@ -1001,6 +1656,33 @@ const App = () => {
         );
     };
 
+    // 6. Registration Success
+    const RegistrationSuccess = ({ event }) => (
+        <div className="p-8 flex flex-col items-center justify-center min-h-[70vh] text-center space-y-8">
+            <div className="relative"><div className="absolute inset-0 bg-green-500/30 blur-3xl rounded-full"></div><CheckCircle size={100} className="text-green-500 relative z-10 animate-bounce"/></div>
+            <div><h2 className="text-4xl font-black text-white mb-2">{t('congrats')}</h2><p className="text-gray-400">{t('successMsg')} <span className="text-white font-bold">{event.name}</span></p></div>
+            <div className="bg-gray-800 p-8 rounded-3xl shadow-2xl w-full border border-gray-700">
+                {event.laneAssignment ? (
+                    <>
+                        <p className="text-gray-400 text-sm uppercase tracking-widest mb-2">{t('yourNumber')}</p>
+                        <div className="flex justify-center items-baseline text-white font-black tracking-widest">
+                            <span className="text-7xl text-indigo-400">{event.laneAssignment}</span>
+                            <span className="text-5xl mx-2">-</span>
+                            <span className="text-8xl">{formatNumber(event.queueNumber)}</span>
+                        </div>
+                    </>
+                ) : (
+                    <div className="py-4">
+                        <div className="text-yellow-400 text-xl font-bold mb-2">{t('waitingForDraw')}</div>
+                        <p className="text-gray-400 text-sm">請先完成報到手續，主辦單位將在報名截止後進行抽籤分組。</p>
+                    </div>
+                )}
+                <div className="mt-6 pt-6 border-t border-gray-700/50"><p className="text-sm text-yellow-500 font-medium flex items-center justify-center"><CreditCard size={14} className="mr-2"/> {t('rememberPayment')}</p></div>
+            </div>
+            <button onClick={() => navigate('browse')} className="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 rounded-2xl transition">{t('backToHome')}</button>
+        </div>
+    );
+
     // 7. Event Manager (後台) - 新增 Categories 切換與列印
     const EventManager = ({ event }) => {
         // ✅ 關鍵修復：安全初始化 Hook，防止 event 為 null 時當機
@@ -1010,7 +1692,7 @@ const App = () => {
 
         const [activeTab, setActiveTab] = useState('checkin'); 
         const [allRegistrations, setAllRegistrations] = useState([]);
-        const [callStatus, setCallStatus] = useState({ displayNumbers: [] });
+        const [callStatus, setCallStatus] = useState({ displayNumbers: [], currentSequence: 1 });
         const [isProcessing, setIsProcessing] = useState(false);
         const [isPrintMode, setIsPrintMode] = useState(false);
         
@@ -1171,7 +1853,7 @@ const App = () => {
     const BottomNav = () => (
         <div className="fixed bottom-0 left-0 right-0 bg-gray-900/90 backdrop-blur-md border-t border-gray-800 flex justify-around items-center p-2 pb-safe z-50 md:max-w-md md:mx-auto md:rounded-t-2xl">
             {[{n:t('navHome'),i:Grid,p:'browse'}, {n:t('navCreate'),i:PlusCircle,p:'create'}, {n:t('navMy'),i:UserIcon,p:'my_events'}, {n:t('navManage'),i:ClipboardList,p:'manage_list'}].map(i=>(
-                <button key={i.p} onClick={()=>navigate(i.p)} className={`flex flex-col items-center justify-center p-2 w-full transition active:scale-90 ${currentPage===i.p || (currentPage==='detail' && i.p==='browse') ?'text-red-500':'text-gray-500 hover:text-gray-300'}`}><i.i size={26} strokeWidth={currentPage===i.p ? 2.5 : 2}/><span className="text-[10px] mt-1 font-medium">{i.n}</span></button>
+                <button key={i.p} onClick={()=>navigate(i.p)} className={`flex flex-col items-center justify-center p-2 w-full transition active:scale-90 ${currentPage===i.p || (currentPage==='detail' && i.p==='browse') || (currentPage==='registerSuccess' && i.p==='browse') ?'text-red-500':'text-gray-500 hover:text-gray-300'}`}><i.i size={26} strokeWidth={currentPage===i.p ? 2.5 : 2}/><span className="text-[10px] mt-1 font-medium">{i.n}</span></button>
             ))}
         </div>
     );
