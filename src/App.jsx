@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction, collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
-// ✅ 關鍵修復：將 User 圖示改名為 UserIcon，避免與使用者變數 user 衝突導致白畫面
 import { MapPin, Calendar, Users, PlusCircle, LayoutList, CheckCircle, ChevronLeft, Loader2, Megaphone, Settings, ListChecks, Shuffle, TrendingUp, XCircle, DollarSign, ExternalLink, CreditCard, Grid, Play, SkipForward, Hash, Globe, BellRing, Search, Star, Heart, Trophy, AlertCircle, Trash2, Sparkles, Flag, Crown, Swords, Timer, ClipboardList, User as UserIcon, LogOut, Mail, Lock, KeyRound, Copy, Bell, Zap, Dices, Edit, Save, Image as ImageIcon, Printer, FileText, X, Plus, AlertTriangle } from 'lucide-react';
 
 // --- 請修改這裡 (填入您的 Firebase 資料) ---
@@ -21,7 +20,6 @@ const firebaseConfig = {
 // --- 初始化 Firebase ---
 let app, auth, db;
 try {
-  // 增加防呆檢查
   if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("請填入")) {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
@@ -381,13 +379,32 @@ const App = () => {
         window.scrollTo(0, 0);
     };
 
+    if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white"><Loader2 className="animate-spin mr-2" size={24} /> 正在初始化...</div>;
+
     // --- 頁面組件 ---
 
-    // 1. 首頁
+    // 1. 首頁 (EventList)
     const EventList = () => {
+        const [filterRegion, setFilterRegion] = useState('');
+        const [filterTime, setFilterTime] = useState('');
+        const uniqueRegions = [...new Set(events.map(e => e.region).filter(r => r))];
         const sortedEvents = [...events].sort((a, b) => new Date(a.date) - new Date(b.date));
+        
+        const filteredEvents = sortedEvents.filter(event => {
+            const matchesRegion = filterRegion === '' || event.region === filterRegion;
+            const matchesTime = filterTime === '' || (filterTime === 'upcoming' && new Date(event.date) >= new Date()) || (filterTime === 'past' && new Date(event.date) < new Date());
+            return matchesRegion && matchesTime;
+        });
+
         const upcomingEvents = sortedEvents.filter(e => new Date(e.date) >= new Date());
-        const featuredEvent = upcomingEvents.length > 0 ? upcomingEvents[0] : (sortedEvents.length > 0 ? sortedEvents[0] : null);
+        const featuredEvent = upcomingEvents.length > 0 
+            ? upcomingEvents[0] 
+            : (sortedEvents.length > 0 ? sortedEvents[sortedEvents.length - 1] : null);
+        
+        const recommendedEvents = sortedEvents
+            .filter(e => e.id !== featuredEvent?.id)
+            .sort(() => 0.5 - Math.random())
+            .slice(0, 5);
 
         return (
             <div className="p-4 space-y-6 pb-24">
@@ -405,6 +422,12 @@ const App = () => {
                         <button onClick={handleLogout} className="text-xs text-gray-500 hover:text-red-400 flex items-center"><LogOut size={12} className="mr-1"/> {t('logout')}</button>
                     </div>
                 </div>
+                
+                <div className="grid grid-cols-2 gap-3">
+                    <select value={filterRegion} onChange={(e) => setFilterRegion(e.target.value)} className="p-2.5 rounded-xl bg-gray-800 text-white text-sm border border-gray-700 focus:ring-2 focus:ring-red-500 outline-none"><option value="">{t('allRegions')}</option>{uniqueRegions.map(r => <option key={r} value={r}>{r}</option>)}</select>
+                    <select value={filterTime} onChange={(e) => setFilterTime(e.target.value)} className="p-2.5 rounded-xl bg-gray-800 text-white text-sm border border-gray-700 focus:ring-2 focus:ring-red-500 outline-none"><option value="">{t('allTimes')}</option><option value="upcoming">{t('upcoming')}</option><option value="past">{t('past')}</option></select>
+                </div>
+
                 {featuredEvent && (
                     <div onClick={() => navigate('detail', featuredEvent)} className="relative w-full h-48 bg-gray-800 rounded-3xl overflow-hidden cursor-pointer border border-gray-700 group">
                        {featuredEvent.bannerUrl ? (
@@ -419,8 +442,9 @@ const App = () => {
                        </div>
                     </div>
                 )}
+
                 <div className="space-y-3">
-                    {sortedEvents.map(event => (
+                    {filteredEvents.length > 0 ? filteredEvents.map(event => (
                         <div key={event.id} onClick={() => navigate('detail', event)} className="bg-gray-800 p-4 rounded-2xl shadow-md border border-gray-700/50 active:bg-gray-700 transition cursor-pointer flex gap-3 relative overflow-hidden">
                             {event.bannerUrl && <div className="absolute inset-0 opacity-20"><img src={event.bannerUrl} className="w-full h-full object-cover" alt=""/></div>}
                             <div className="relative z-10 flex-1">
@@ -435,43 +459,67 @@ const App = () => {
                                 <div className="flex items-center text-sm text-gray-400 mt-2"><Calendar size={14} className="mr-1.5 text-red-400"/>{formatDateOnly(event.date)}</div>
                             </div>
                         </div>
-                    ))}
+                    )) : <div className="text-center text-gray-500 py-12 bg-gray-800/30 rounded-xl border border-dashed border-gray-700">{t('noEvents')}</div>}
                 </div>
             </div>
         );
     };
 
-    // 2. 活動詳情
+    // 2. 活動詳情與報名 (EventDetail)
     const EventDetail = ({ event }) => {
-        if (!event) return <div className="p-8 text-center text-white"><Loader2 className="animate-spin mx-auto mb-2"/> Loading event data...</div>;
-
+        // ✅ 修復重點：所有 Hooks 必須在 return 之前呼叫，即使 event 是 null
         const [isRegistering, setIsRegistering] = useState(false);
         const [showCallAlert, setShowCallAlert] = useState(false); 
+        const [showQualifyAlert, setShowQualifyAlert] = useState(false);
+        const [notificationPermission, setNotificationPermission] = useState(Notification.permission);
+        const [wakeLock, setWakeLock] = useState(null);
+        
+        // 編輯模式狀態 (使用可選鏈防止 event 為 null 時報錯)
         const [isEditing, setIsEditing] = useState(false);
-        const [editForm, setEditForm] = useState({ ...event, categoriesStr: event.categories ? event.categories.join(', ') : 'Standard' });
+        const [editForm, setEditForm] = useState({ 
+            ...event, 
+            categoriesStr: event?.categories ? event.categories.join(', ') : 'Standard' 
+        });
         const [isSaving, setIsSaving] = useState(false);
         const [stageName, setStageName] = useState('');
-        const [selectedCategory, setSelectedCategory] = useState(event.categories?.[0] || 'Standard');
+        const [selectedCategory, setSelectedCategory] = useState(event?.categories?.[0] || 'Standard');
 
-        const registration = myRegistrations.find(reg => reg.eventId === event.id);
-        const isCreator = user && event.creatorId === user.uid;
+        const registration = myRegistrations.find(reg => reg.eventId === event?.id);
+        const isCreator = user && event && event.creatorId === user.uid;
         const audioRef = useRef(null);
+        const prevQualifiedRoundRef = useRef(registration?.qualifiedRound || 1);
 
-        const getMapLink = () => event.googleMapLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.region || '')}`;
+        // 🛑 安全檢查：如果沒有 event 資料，顯示 Loading 畫面
+        if (!event) return <div className="p-8 text-center text-white"><Loader2 className="animate-spin mx-auto mb-2"/> Loading event data...</div>;
+
+        const getMapLink = () => event.googleMapLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.region)}`;
 
         useEffect(() => {
-            if (registration?.called) { 
-                setShowCallAlert(true); 
-                if (audioRef.current) audioRef.current.play().catch(()=>{}); 
+            if (registration?.called) {
+                setShowCallAlert(true);
+                if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 1000]); 
+                if (audioRef.current) audioRef.current.play().catch(e => console.log("Autoplay blocked:", e));
             }
         }, [registration?.called]);
 
+        useEffect(() => {
+            if (registration && registration.qualifiedRound > prevQualifiedRoundRef.current) {
+                setShowQualifyAlert(true);
+                if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500, 100, 500]); 
+                if (audioRef.current) audioRef.current.play().catch(e => console.log("Autoplay blocked:", e));
+                prevQualifiedRoundRef.current = registration.qualifiedRound;
+            }
+        }, [registration?.qualifiedRound]);
+
         const handleRegistration = async () => {
             if (!db || !user || isRegistering) {
-                if (!db) alert("資料庫未連線！");
+                if (!db) alert("Database Connection Error! Please check your API Key.");
                 return;
             }
-            if (!stageName.trim()) { setSystemMessage("請填寫舞台名稱 (Stage Name)"); return; }
+            if (!stageName.trim()) { 
+                alert("請填寫舞台名稱 (Stage Name)"); 
+                return; 
+            }
 
             setIsRegistering(true);
             setSystemMessage(t('registerProcessing'));
@@ -479,19 +527,30 @@ const App = () => {
                 const regCollectionRef = collection(db, `artifacts/${appId}/public/data/registrations`);
                 const q = query(regCollectionRef, where("eventId", "==", event.id), where("userId", "==", user.uid));
                 const snapshot = await getDocs(q);
-                if (!snapshot.empty) throw new Error("Already registered");
-
-                const newReg = { 
+                if (!snapshot.empty) {
+                    alert("您已經報名過此活動了！");
+                    setIsRegistering(false);
+                    return;
+                }
+                
+                const newReg = {
                     eventId: event.id, userId: user.uid, 
                     stageName: stageName, category: selectedCategory,
-                    queueNumber: null, laneAssignment: null, isAssigned: false, 
-                    registrationTime: serverTimestamp(), checkedIn: false, paid: false, called: false, qualifiedRound: 1 
+                    queueNumber: null, 
+                    laneAssignment: null,
+                    isAssigned: false,
+                    registrationTime: serverTimestamp(),
+                    checkedIn: false, paid: false, nextRoundStatus: '', called: false,
+                    qualifiedRound: 1
                 };
                 const docRef = await addDoc(regCollectionRef, newReg);
                 setMyRegistrations(prev => [...prev, { id: docRef.id, ...newReg }]);
-                navigate('registerSuccess', { ...event, temp: true, laneAssignment: null }); 
+                navigate('registerSuccess', { ...event, temp: true });
             } catch (e) {
-                console.error(e); setSystemMessage(`${t('registerFail')}: ${e.message}`); setIsRegistering(false);
+                console.error(e); 
+                alert(`報名失敗: ${e.message}`);
+                setSystemMessage(`${t('registerFail')}: ${e.message}`); 
+                setIsRegistering(false);
             }
         };
 
@@ -511,7 +570,7 @@ const App = () => {
                 setIsEditing(false);
                 fetchEvents();
             } catch (error) {
-                setSystemMessage("Update Failed: " + error.message);
+                alert("Update Failed: " + error.message);
             } finally {
                 setIsSaving(false);
             }
@@ -526,7 +585,7 @@ const App = () => {
                 setSystemMessage(t('deleteSuccess'));
                 fetchEvents();
                 navigate('browse');
-            } catch (error) { setSystemMessage(error.message); setIsSaving(false); }
+            } catch (error) { alert(error.message); setIsSaving(false); }
         };
 
         const handleEndEvent = async () => {
@@ -537,26 +596,58 @@ const App = () => {
                  setSystemMessage(t('eventEnded'));
                  fetchEvents();
                  navigate('browse');
-             } catch(e) { setSystemMessage(e.message); }
+             } catch(e) { alert(e.message); }
         };
-
+        
         const renderStatusBadge = (reg) => (
             <div className="flex space-x-2 text-sm mt-3 flex-wrap justify-center gap-2">
-                <span className={`px-3 py-1 rounded-full font-semibold text-xs shadow-sm ${reg.checkedIn ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300'}`}>{reg.checkedIn ? `✅ ${t('statusCheckedIn')}` : `⏳ ${t('statusNotCheckedIn')}`}</span>
-                <span className={`px-3 py-1 rounded-full font-semibold text-xs shadow-sm ${reg.paid ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300'}`}>{reg.paid ? `💰 ${t('statusPaid')}` : `❌ ${t('statusNotPaid')}`}</span>
+                <span className={`px-3 py-1 rounded-full font-semibold text-xs shadow-sm ${reg.checkedIn ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300 border border-gray-600'}`}>
+                    {reg.checkedIn ? `✅ ${t('statusCheckedIn')}` : `⏳ ${t('statusNotCheckedIn')}`}
+                </span>
+                <span className={`px-3 py-1 rounded-full font-semibold text-xs shadow-sm ${reg.paid ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300 border border-gray-600'}`}>
+                    {reg.paid ? `💰 ${t('statusPaid')}` : `❌ ${t('statusNotPaid')}`}
+                </span>
             </div>
         );
 
         return (
             <div className="p-4 space-y-5 relative pb-24">
                 <audio ref={audioRef} src="data:audio/mp3;base64,SUQzBAAAAAABAFRYWFgAAAASAAADbWFqb3JfYnJhbmQAbXA0MgBUWFhYAAAAEQAAA21pbm9yX3ZlcnNpb24AMABUWFhYAAAAHAAAA2NvbXBhdGlibGVfYnJhbmRzAGlzb21tcDQyAFRTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAABH//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB///tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB" /> 
-                {showCallAlert && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm animate-in fade-in zoom-in duration-300"><div className="bg-red-600 p-8 rounded-3xl text-center animate-bounce"><h2 className="text-3xl font-black text-white">{t('itsYourTurn')}</h2><button onClick={() => setShowCallAlert(false)} className="bg-white text-red-600 px-8 py-3 rounded-full mt-4 font-bold">OK</button></div></div>}
 
-                <button onClick={() => navigate('browse')} className="flex items-center text-gray-400 hover:text-white"><ChevronLeft size={24}/> {t('backToEvents')}</button>
+                {showCallAlert && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm animate-in fade-in zoom-in duration-300">
+                        <div className="bg-red-600 p-8 rounded-3xl shadow-2xl text-center max-w-xs w-full border-4 border-white animate-bounce">
+                            <BellRing size={64} className="text-white mx-auto mb-4 animate-pulse" />
+                            <h2 className="text-3xl font-black text-white mb-2">{t('itsYourTurn')}</h2>
+                            <p className="text-lg text-white mb-6 font-bold opacity-90">{t('pleaseGoToStage')}</p>
+                            <button onClick={() => { setShowCallAlert(false); if(audioRef.current) audioRef.current.pause(); }} className="bg-white text-red-600 px-8 py-3 rounded-full font-bold text-lg shadow-lg active:scale-95 transition w-full">{t('closeNotification')}</button>
+                        </div>
+                    </div>
+                )}
+
+                {showQualifyAlert && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm animate-in fade-in zoom-in duration-300">
+                        <div className="bg-gradient-to-br from-yellow-500 to-yellow-700 p-8 rounded-3xl shadow-2xl text-center max-w-xs w-full border-4 border-yellow-300 animate-bounce">
+                            <Trophy size={64} className="text-white mx-auto mb-4 animate-pulse" />
+                            <h2 className="text-3xl font-black text-white mb-2">{t('qualifyAlertTitle')}</h2>
+                            <p className="text-lg text-white mb-6 font-bold opacity-90">{t('qualifyAlertMsg')}</p>
+                            <button onClick={() => { setShowQualifyAlert(false); if(audioRef.current) audioRef.current.pause(); }} className="bg-white text-yellow-700 px-8 py-3 rounded-full font-bold text-lg shadow-lg active:scale-95 transition w-full">{t('closeNotification')}</button>
+                        </div>
+                    </div>
+                )}
+
+                <button onClick={() => navigate('browse')} className="flex items-center text-gray-400 hover:text-white transition active:scale-95">
+                    <ChevronLeft size={24} className="mr-1"/> <span className="font-medium">{t('backToEvents')}</span>
+                </button>
                 
-                {event.bannerUrl && !isEditing && <div className="w-full h-48 rounded-3xl overflow-hidden mb-4 border border-gray-700"><img src={event.bannerUrl} className="w-full h-full object-cover" alt="Banner" /></div>}
+                {/* Banner Image */}
+                {event.bannerUrl && !isEditing && (
+                    <div className="w-full h-48 rounded-3xl overflow-hidden mb-4 border border-gray-700">
+                        <img src={event.bannerUrl} className="w-full h-full object-cover" alt="Banner" onError={(e) => e.target.style.display = 'none'} />
+                    </div>
+                )}
 
-                <div className="bg-gray-800 p-6 rounded-3xl shadow-2xl border border-gray-700">
+                <div className="bg-gray-800 p-6 rounded-3xl shadow-2xl border border-gray-700 relative overflow-hidden">
                     {isEditing ? (
                         <form onSubmit={handleUpdateEvent} className="space-y-4">
                             <h3 className="text-lg font-bold text-yellow-400 flex items-center"><Edit size={20} className="mr-2"/> {t('editEvent')}</h3>
@@ -574,67 +665,121 @@ const App = () => {
                         </form>
                     ) : (
                         <>
-                            <div className="flex justify-between items-start">
+                            <div className="flex justify-between items-start relative z-10">
                                 <h2 className="text-3xl font-black text-white mb-2">{event.name}</h2>
                                 {isCreator && <button onClick={() => setIsEditing(true)} className="bg-gray-700 text-gray-300 p-2 rounded-full hover:bg-gray-600"><Edit size={16} /></button>}
                             </div>
-                            <p className="text-gray-300 text-sm mb-4 flex items-center"><Calendar size={16} className="mr-2 text-red-500"/> {formatDateTime(event.date)} | {event.region}</p>
-                            <div className="flex flex-wrap gap-2 mb-4">
-                                {event.categories && event.categories.map(c => <span key={c} className="px-2 py-1 bg-indigo-900 text-indigo-300 text-xs rounded border border-indigo-700">{c}</span>)}
+                            <div className="flex gap-2 mb-4 relative z-10 flex-wrap">
+                                {event.categories && event.categories.map(c => (
+                                    <span key={c} className="bg-indigo-900 text-indigo-300 px-2 py-1 rounded text-xs font-bold border border-indigo-700">{c}</span>
+                                ))}
                             </div>
-                            <a href={getMapLink()} target="_blank" rel="noopener noreferrer" className="bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded-full transition flex items-center w-fit mb-4">{t('openMap')} <ExternalLink size={10} className="ml-1"/></a>
-                            <p className="text-gray-400 text-sm whitespace-pre-wrap border-t border-gray-700 pt-4">{event.description}</p>
-                            {event.roundStatus === 'closed' && <div className="mt-4 p-3 bg-red-900/30 text-red-400 border border-red-800 rounded text-center font-bold">{t('eventEnded')}</div>}
+
+                            <div className="space-y-3 relative z-10">
+                                <p className="text-gray-300 flex items-center"><Calendar size={18} className="mr-3 text-red-500"/><span className="text-sm font-medium">{formatDateTime(event.date)}</span></p>
+                                <div className="flex items-start justify-between">
+                                    <div className="flex items-start text-gray-300"><MapPin size={18} className="mr-3 text-red-500 mt-0.5"/><span className="text-sm font-medium">{event.region}</span></div>
+                                    <a href={getMapLink()} target="_blank" rel="noopener noreferrer" className="bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded-full transition flex items-center">{t('openMap')} <ExternalLink size={10} className="ml-1"/></a>
+                                </div>
+                                <div className="pt-4 border-t border-gray-700 mt-4"><p className="text-gray-400 text-sm leading-relaxed whitespace-pre-wrap">{event.description}</p></div>
+                                
+                                {event.roundStatus === 'closed' && <div className="mt-4 p-3 bg-red-900/30 text-red-400 border border-red-800 rounded text-center font-bold">{t('eventEnded')}</div>}
+                            </div>
                         </>
                     )}
                 </div>
 
+                {(event.paymentInfo || event.paymentQrCodeUrl) && !isEditing && (
+                    <div className="bg-gray-800 p-5 rounded-3xl border border-gray-700">
+                        <h3 className="text-lg font-bold text-white flex items-center mb-3"><CreditCard size={20} className="mr-2 text-yellow-500"/> {t('paymentInfoTitle')}</h3>
+                        {event.paymentInfo && <div className="bg-gray-900 p-4 rounded-xl text-sm text-gray-300 font-mono leading-relaxed whitespace-pre-wrap">{event.paymentInfo}</div>}
+                        {event.paymentQrCodeUrl && (
+                            <div className="mt-4 flex flex-col items-center">
+                                <p className="text-xs text-gray-500 mb-2">{t('qrCode')}</p>
+                                <div className="p-2 bg-white rounded-xl"><img src={event.paymentQrCodeUrl} alt="收款碼" className="w-40 h-40 object-contain" onError={(e) => {e.target.style.display='none'}} /></div>
+                            </div>
+                        )}
+                    </div>
+                )}
+                
                 {!isEditing && event.roundStatus !== 'closed' && (
                     <div className="fixed bottom-20 left-0 right-0 px-4 md:absolute md:bottom-auto md:px-0 z-20">
                         {isCreator ? (
                             <div className="space-y-2">
-                                <button onClick={() => navigate('manage', event)} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl shadow-xl flex items-center justify-center text-lg">
+                                <button 
+                                    onClick={() => navigate('manage', event)} 
+                                    className="w-full max-w-md mx-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl shadow-xl transition transform active:scale-95 flex items-center justify-center text-lg"
+                                >
                                     <Settings size={24} className="mr-2"/> {t('manageEventBtn')}
                                 </button>
                                 <button onClick={handleEndEvent} className="w-full bg-red-900/50 hover:bg-red-900 text-red-300 font-bold py-3 rounded-xl border border-red-800 flex items-center justify-center text-sm">
                                     <XCircle size={16} className="mr-2"/> {t('endEventBtn')}
                                 </button>
                             </div>
+                        ) : !registration ? (
+                            <div className="bg-gray-800 p-4 rounded-2xl border border-gray-700 shadow-xl space-y-3">
+                                <input type="text" placeholder={t('stageNamePh')} value={stageName} onChange={e => setStageName(e.target.value)} className="w-full p-3 bg-gray-900 text-white rounded-xl border border-gray-600 outline-none"/>
+                                {event.categories && event.categories.length > 0 && (
+                                    <select value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)} className="w-full p-3 bg-gray-900 text-white rounded-xl border border-gray-600 outline-none appearance-none">
+                                        {event.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                )}
+                                <button onClick={handleRegistration} disabled={isRegistering} className="w-full bg-gradient-to-r from-red-600 to-red-700 text-white font-bold py-4 rounded-xl flex items-center justify-center text-lg">
+                                    {isRegistering ? <Loader2 className="animate-spin mr-2"/> : <Users size={24} className="mr-2"/>} {t('randomRegisterBtn')}
+                                </button>
+                            </div>
                         ) : (
-                            !registration ? (
-                                <div className="bg-gray-800 p-4 rounded-2xl border border-gray-700 shadow-xl space-y-3">
-                                    <input type="text" placeholder={t('stageNamePh')} value={stageName} onChange={e => setStageName(e.target.value)} className="w-full p-3 bg-gray-900 text-white rounded-xl border border-gray-600 outline-none"/>
-                                    {event.categories && event.categories.length > 0 && (
-                                        <select value={selectedCategory} onChange={e => setSelectedCategory(e.target.value)} className="w-full p-3 bg-gray-900 text-white rounded-xl border border-gray-600 outline-none appearance-none">
-                                            {event.categories.map(c => <option key={c} value={c}>{c}</option>)}
-                                        </select>
-                                    )}
-                                    <button onClick={handleRegistration} disabled={isRegistering} className="w-full bg-gradient-to-r from-red-600 to-red-700 text-white font-bold py-4 rounded-xl flex items-center justify-center text-lg">
-                                        {isRegistering ? <Loader2 className="animate-spin mr-2"/> : <Users size={24} className="mr-2"/>} {t('randomRegisterBtn')}
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="bg-gray-800 p-4 rounded-2xl border border-green-600 text-center relative">
-                                    <p className="text-green-400 font-bold">{t('registered')}</p>
-                                    <p className="text-white my-1 text-sm">Stage Name: <span className="font-bold text-yellow-400">{registration.stageName}</span></p>
-                                    <p className="text-gray-400 text-xs mb-2">{t('category')}: {registration.category}</p>
-                                    {registration.laneAssignment ? (
-                                        <p className="text-2xl font-black text-white">{registration.laneAssignment}-{formatNumber(registration.queueNumber)}</p>
-                                    ) : (
-                                        <p className="text-lg text-yellow-400 font-bold animate-pulse my-2">{t('waitingForDraw')}</p>
-                                    )}
-                                    {renderStatusBadge(registration)}
-                                </div>
-                            )
+                            <div className="bg-gray-800/90 backdrop-blur-lg p-4 rounded-2xl border border-green-600 shadow-2xl text-center max-w-md mx-auto relative overflow-hidden">
+                                <p className="text-green-400 text-xs uppercase tracking-wider mb-1">{t('registered')}</p>
+                                <p className="text-white my-1 text-sm">Stage Name: <span className="font-bold text-yellow-400">{registration.stageName}</span></p>
+                                <p className="text-gray-400 text-xs mb-2">{t('category')}: {registration.category}</p>
+                                {registration.laneAssignment ? (
+                                    <p className="text-2xl font-black text-white">{registration.laneAssignment}-{formatNumber(registration.queueNumber)}</p>
+                                ) : (
+                                    <p className="text-lg text-yellow-400 font-bold animate-pulse my-2">{t('waitingForDraw')}</p>
+                                )}
+                                {renderStatusBadge(registration)}
+                            </div>
                         )}
                     </div>
                 )}
-                <div className="h-32"></div>
+                
+                {/* 底部墊高 */}
+                <div className="h-32 md:hidden"></div>
+
+                {systemMessage && <p className="text-sm text-yellow-400 text-center bg-black/50 p-2 rounded-lg backdrop-blur">{systemMessage}</p>}
             </div>
         );
     };
 
-    // 3. 創建活動 (含 Tag 系統)
+    // 3. 報名成功畫面 (RegistrationSuccess) ... (保持不變)
+    const RegistrationSuccess = ({ event }) => (
+        <div className="p-8 flex flex-col items-center justify-center min-h-[70vh] text-center space-y-8">
+            <div className="relative"><div className="absolute inset-0 bg-green-500/30 blur-3xl rounded-full"></div><CheckCircle size={100} className="text-green-500 relative z-10 animate-bounce"/></div>
+            <div><h2 className="text-4xl font-black text-white mb-2">{t('congrats')}</h2><p className="text-gray-400">{t('successMsg')} <span className="text-white font-bold">{event.name}</span></p></div>
+            <div className="bg-gray-800 p-8 rounded-3xl shadow-2xl w-full border border-gray-700">
+                {event.laneAssignment ? (
+                    <>
+                        <p className="text-gray-400 text-sm uppercase tracking-widest mb-2">{t('yourNumber')}</p>
+                        <div className="flex justify-center items-baseline text-white font-black tracking-widest">
+                            <span className="text-7xl text-indigo-400">{event.laneAssignment}</span>
+                            <span className="text-5xl mx-2">-</span>
+                            <span className="text-8xl">{formatNumber(event.queueNumber)}</span>
+                        </div>
+                    </>
+                ) : (
+                    <div className="py-4">
+                        <div className="text-yellow-400 text-xl font-bold mb-2">{t('waitingForDraw')}</div>
+                        <p className="text-gray-400 text-sm">請先完成報到手續，主辦單位將在報名截止後進行抽籤分組。</p>
+                    </div>
+                )}
+                <div className="mt-6 pt-6 border-t border-gray-700/50"><p className="text-sm text-yellow-500 font-medium flex items-center justify-center"><CreditCard size={14} className="mr-2"/> {t('rememberPayment')}</p></div>
+            </div>
+            <button onClick={() => navigate('browse')} className="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 rounded-2xl transition">{t('backToHome')}</button>
+        </div>
+    );
+
+    // 4. 創建活動頁面 (CreateEventForm) ... (保持不變)
     const CreateEventForm = () => {
         const [formData, setFormData] = useState({
             name: '', date: '', region: '', description: '', 
@@ -673,7 +818,7 @@ const App = () => {
                 setSystemMessage(`${t('createFail')}: ${error.message}`); setIsSubmitting(false);
             }
         };
-        
+
         const addCategory = () => {
             if(catInput.trim()) {
                 setCategories([...categories, catInput.trim()]);
@@ -733,7 +878,6 @@ const App = () => {
         );
     };
 
-    // 4. My Events
     const MyEvents = () => {
         const myJoinedEvents = events.filter(e => myRegistrations.some(r => r.eventId === e.id));
         return (
@@ -770,7 +914,6 @@ const App = () => {
         );
     };
 
-    // 5. Management List
     const ManagementList = () => {
         const myHostedEvents = events.filter(e => e.creatorId === user.uid);
         return (
@@ -799,42 +942,17 @@ const App = () => {
         );
     };
 
-    // 6. Registration Success
-    const RegistrationSuccess = ({ event }) => (
-        <div className="p-8 flex flex-col items-center justify-center min-h-[70vh] text-center space-y-8">
-            <div className="relative"><div className="absolute inset-0 bg-green-500/30 blur-3xl rounded-full"></div><CheckCircle size={100} className="text-green-500 relative z-10 animate-bounce"/></div>
-            <div><h2 className="text-4xl font-black text-white mb-2">{t('congrats')}</h2><p className="text-gray-400">{t('successMsg')} <span className="text-white font-bold">{event.name}</span></p></div>
-            <div className="bg-gray-800 p-8 rounded-3xl shadow-2xl w-full border border-gray-700">
-                {event.laneAssignment ? (
-                    <>
-                        <p className="text-gray-400 text-sm uppercase tracking-widest mb-2">{t('yourNumber')}</p>
-                        <div className="flex justify-center items-baseline text-white font-black tracking-widest">
-                            <span className="text-7xl text-indigo-400">{event.laneAssignment}</span>
-                            <span className="text-5xl mx-2">-</span>
-                            <span className="text-8xl">{formatNumber(event.queueNumber)}</span>
-                        </div>
-                    </>
-                ) : (
-                    <div className="py-4">
-                        <div className="text-yellow-400 text-xl font-bold mb-2">{t('waitingForDraw')}</div>
-                        <p className="text-gray-400 text-sm">請先完成報到手續，主辦單位將在報名截止後進行抽籤分組。</p>
-                    </div>
-                )}
-                <div className="mt-6 pt-6 border-t border-gray-700/50"><p className="text-sm text-yellow-500 font-medium flex items-center justify-center"><CreditCard size={14} className="mr-2"/> {t('rememberPayment')}</p></div>
-            </div>
-            <button onClick={() => navigate('browse')} className="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 rounded-2xl transition">{t('backToHome')}</button>
-        </div>
-    );
-
     // 7. Event Manager (後台) - 新增 Categories 切換與列印
     const EventManager = ({ event }) => {
+        // ✅ 關鍵修復：安全初始化 Hook，防止 event 為 null 時當機
+        const [currentCategory, setCurrentCategory] = useState(event?.categories?.[0] || 'Standard');
+        
         if (!event) return <div className="p-8 text-center">Loading...</div>;
 
         const [activeTab, setActiveTab] = useState('checkin'); 
         const [allRegistrations, setAllRegistrations] = useState([]);
         const [callStatus, setCallStatus] = useState({ displayNumbers: [] });
         const [isProcessing, setIsProcessing] = useState(false);
-        const [currentCategory, setCurrentCategory] = useState(event.categories?.[0] || 'Standard');
         const [isPrintMode, setIsPrintMode] = useState(false);
         
         const REG_COL_PATH = `artifacts/${appId}/public/data/registrations`;
@@ -935,7 +1053,7 @@ const App = () => {
                 <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
                     <label className="text-xs text-gray-400 block mb-1">{t('category')}</label>
                     <select value={currentCategory} onChange={e => setCurrentCategory(e.target.value)} className="w-full p-2 bg-gray-900 text-white rounded border border-gray-600">
-                        {event.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                        {event.categories && event.categories.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                 </div>
 
@@ -1002,7 +1120,7 @@ const App = () => {
     return (
         <div className="min-h-screen bg-black flex flex-col items-center text-sans">
             <div id="app" className="w-full max-w-md min-h-screen flex flex-col bg-gray-900 text-white shadow-2xl relative">
-                <header className="bg-gray-900/90 backdrop-blur-md text-white p-4 flex justify-between items-center sticky top-0 z-40 border-b border-gray-800"><h1 className="text-xl font-black tracking-tight flex items-center"><span className="text-red-600 mr-1 text-2xl">⚡</span> {t('appTitle')}</h1><div className="flex items-center gap-2 bg-gray-800 rounded-full px-3 py-1.5 border border-gray-700"><Globe size={14} className="text-gray-400"/><select value={lang} onChange={(e) => setLang(e.target.value)} className="bg-transparent text-xs text-gray-300 focus:outline-none cursor-pointer font-medium"><option value="zh-TW">繁體</option><option value="zh-CN">简中</option><option value="en">EN</option><option value="ja">JP</option><option value="ko">KR</option></select></div></header>
+                <header className="bg-gray-900/90 backdrop-blur-md text-white p-4 flex justify-between items-center sticky top-0 z-40 border-b border-gray-800"><h1 className="text-xl font-black tracking-tight flex items-center"><span className="text-red-600 mr-1 text-2xl">⚡</span> {t('appTitle')}</h1></header>
                 <main className="flex-grow overflow-y-auto overflow-x-hidden relative">{renderPage()}</main>
                 <BottomNav />
             </div>
