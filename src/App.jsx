@@ -2,31 +2,35 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction, collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
-import { MapPin, Calendar, Users, PlusCircle, LayoutList, CheckCircle, ChevronLeft, Loader2, Megaphone, Settings, ListChecks, Shuffle, TrendingUp, XCircle, DollarSign, ExternalLink, CreditCard, Grid, Play, SkipForward, Hash, Globe, BellRing, Search, Star, Heart, Trophy, AlertCircle, Trash2, Sparkles, Flag, Crown, Swords, Timer, ClipboardList, User as UserIcon, LogOut, Mail, Lock, KeyRound, Copy, Bell, Zap, Dices, Edit, Save, Image as ImageIcon, Printer, FileText, X, Plus, AlertTriangle } from 'lucide-react';
+// ✅ User 圖示改名為 UserIcon，避免衝突
+import { MapPin, Calendar, Users, PlusCircle, LayoutList, CheckCircle, ChevronLeft, Loader2, Megaphone, Settings, ListChecks, Shuffle, TrendingUp, XCircle, DollarSign, ExternalLink, CreditCard, Grid, Play, SkipForward, Hash, Globe, BellRing, Search, Star, Heart, Trophy, AlertCircle, Trash2, Sparkles, Flag, Crown, Swords, Timer, ClipboardList, User as UserIcon, LogOut, Mail, Lock, KeyRound, Copy, Bell, Zap, Dices, Edit, Save, Image as ImageIcon, Printer, FileText, X, Plus } from 'lucide-react';
 
-// --- 請修改這裡 (填入您的 Firebase 資料) ---
+// --- App ID ---
 const appId = 'dance-event-demo-01'; 
 
+// --- Firebase 設定 (已填入您的金鑰) ---
 const firebaseConfig = {
-    apiKey: "AIzaSyC7sx5yZtUHYXbVtVTokmJbz5GS9U8aVtg",
-    authDomain: "number-calling.firebaseapp.com",
-    projectId: "number-calling",
-    storageBucket: "number-calling.firebasestorage.app",
-    messagingSenderId: "377620988598",
-    appId: "1:377620988598:web:420ff4b20b1137375d5c17",
-    measurementId: "G-WSX5WGW02B"
-  };
+  apiKey: "AIzaSyC7sx5yZtUHYXbVtVTokmJbz5GS9U8aVtg",
+  authDomain: "number-calling.firebaseapp.com",
+  projectId: "number-calling",
+  storageBucket: "number-calling.firebasestorage.app",
+  messagingSenderId: "377620988598",
+  appId: "1:377620988598:web:420ff4b20b1137375d5c17",
+  measurementId: "G-WSX5WGW02B"
+};
 
 // --- 初始化 Firebase ---
 let app, auth, db;
 try {
+  // 檢查 Config 是否有效
   if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("請填入")) {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
+    // 設定持久化
     setPersistence(auth, browserLocalPersistence).catch(console.error);
   } else {
-    console.warn("Firebase Config 尚未填寫！部分功能將無法使用。");
+    console.warn("Firebase Config 錯誤！");
   }
 } catch (e) {
   console.error("Firebase Init Failed:", e);
@@ -90,7 +94,7 @@ const translations = {
         eventFormatLabel: "主要賽制 (Main Format)",
         categoriesLabel: "比賽組別/風格 (Categories)",
         addCategoryBtn: "加入",
-        categoryPh: "輸入組別名稱 (例如: Breaking)",
+        categoryPh: "輸入組別名稱 (例如: Hip Hop)",
         compSettingsTitle: "賽事與賽道規格",
         laneCountPh: "賽道數量 (A, B...)",
         laneCapacityPh: "每賽道人數上限",
@@ -204,29 +208,7 @@ const translations = {
         format7toSmoke: "7 to Smoke (車輪戰)",
         formatTournament: "Tournament (1 on 1)",
     },
-    'en': { 
-        appTitle: "Dance Platform", 
-        loginTitle: "Login",
-        registerTitle: "Create Account",
-        emailPh: "Email",
-        passwordPh: "Password (min 6 chars)",
-        loginBtn: "Login",
-        registerBtn: "Register",
-        switchToRegister: "No account? Register here",
-        switchToLogin: "Have an account? Login here",
-        logout: "Logout",
-        welcome: "Welcome",
-        discoverEvents: "Explore",
-        createEventTitle: "Create Event",
-        eventFormatLabel: "Main Format",
-        categoriesLabel: "Categories",
-        addCategoryBtn: "Add",
-        categoryPh: "Category Name",
-        formatStandard: "Standard",
-        format7toSmoke: "7 to Smoke",
-        formatTournament: "Tournament",
-        // ... (英文部分簡略)
-    }
+    'en': { appTitle: "Dance Platform" } 
 };
 
 const formatNumber = (num) => num > 0 ? num.toString().padStart(3, '0') : '--';
@@ -261,26 +243,23 @@ const App = () => {
     const [events, setEvents] = useState([]);
     const [myRegistrations, setMyRegistrations] = useState([]);
 
-    const t = (key) => translations[lang]?.[key] || translations['zh-TW'][key] || translations['en'][key] || key;
+    const t = (key) => translations[lang]?.[key] || translations['zh-TW'][key] || key;
 
     // --- Firebase 狀態監聽 ---
     useEffect(() => {
         if (!auth) {
-            setSystemMessage("Firebase 初始化失敗，請檢查 Config");
+            setSystemMessage("初始化失敗: 尚未連線至 Firebase");
             setLoading(false);
             return;
         }
 
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            if (currentUser && currentUser.isAnonymous) {
-                await signOut(auth);
-                setUser(null);
-            } else {
-                setUser(currentUser);
-            }
+            // 移除匿名帳號邏輯，只允許正式帳號
+            setUser(currentUser);
             setIsAuthReady(true);
             setLoading(false);
-            if (currentUser && !currentUser.isAnonymous) {
+            
+            if (currentUser) {
                 setAuthEmail('');
                 setAuthPassword('');
             }
@@ -295,15 +274,21 @@ const App = () => {
         try {
             if (isRegisteringMode) {
                 await createUserWithEmailAndPassword(auth, authEmail, authPassword);
-                setSystemMessage("Registered successfully!");
+                setSystemMessage("註冊成功！");
             } else {
+                // 登入前設定持久化
                 await setPersistence(auth, browserLocalPersistence);
                 await signInWithEmailAndPassword(auth, authEmail, authPassword);
-                setSystemMessage("Logged in successfully!");
+                setSystemMessage("登入成功！");
             }
         } catch (error) {
             console.error(error);
-            setSystemMessage(error.message);
+            let msg = error.message;
+            if(error.code === 'auth/invalid-email') msg = "Email 格式錯誤";
+            if(error.code === 'auth/wrong-password') msg = "密碼錯誤";
+            if(error.code === 'auth/user-not-found') msg = "找不到使用者";
+            if(error.code === 'auth/email-already-in-use') msg = "Email 已被註冊";
+            setSystemMessage(msg);
         }
     };
 
@@ -330,6 +315,7 @@ const App = () => {
             const fetchedEvents = querySnapshot.docs.map(doc => ({ 
                 id: doc.id, 
                 ...doc.data(), 
+                // 確保欄位存在
                 categories: doc.data().categories || ['Standard'],
                 laneCount: doc.data().laneCount || 4,
                 laneCapacity: doc.data().laneCapacity || 50, 
@@ -379,7 +365,50 @@ const App = () => {
         window.scrollTo(0, 0);
     };
 
-    if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white"><Loader2 className="animate-spin mr-2" size={24} /> 正在初始化...</div>;
+    if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white"><Loader2 className="animate-spin mr-2" size={24} /> Loading...</div>;
+
+    if (!user) {
+        return (
+            <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
+                <div className="w-full max-w-md bg-gray-900 p-8 rounded-3xl border border-gray-800 shadow-2xl">
+                    <h1 className="text-3xl font-black text-white mb-2 text-center flex items-center justify-center"><span className="text-red-600 mr-2">⚡</span> {t('appTitle')}</h1>
+                    <p className="text-gray-400 text-center mb-8 text-sm">{isRegisteringMode ? t('registerTitle') : t('loginTitle')}</p>
+                    
+                    <form onSubmit={handleAuth} className="space-y-4">
+                        <div className="bg-gray-800 p-2 rounded-xl border border-gray-700 flex items-center">
+                            <Mail className="text-gray-500 ml-2" size={20}/>
+                            <input type="email" placeholder={t('emailPh')} value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="bg-transparent flex-1 p-2 text-white outline-none ml-2" required />
+                        </div>
+                        <div className="bg-gray-800 p-2 rounded-xl border border-gray-700 flex items-center">
+                            <Lock className="text-gray-500 ml-2" size={20}/>
+                            <input type="password" placeholder={t('passwordPh')} value={authPassword} onChange={e => setAuthPassword(e.target.value)} className="bg-transparent flex-1 p-2 text-white outline-none ml-2" required />
+                        </div>
+                        <button type="submit" className="w-full bg-gradient-to-r from-red-600 to-red-800 text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition">
+                            {isRegisteringMode ? t('registerBtn') : t('loginBtn')}
+                        </button>
+                    </form>
+                    
+                    <div className="mt-6 text-center">
+                        <button onClick={() => setIsRegisteringMode(!isRegisteringMode)} className="text-gray-500 hover:text-white text-sm transition">
+                            {isRegisteringMode ? t('switchToLogin') : t('switchToRegister')}
+                        </button>
+                    </div>
+                    
+                    <div className="mt-6 flex justify-center">
+                        <div className="flex items-center gap-2 bg-gray-800 rounded-full px-3 py-1.5 border border-gray-700">
+                            <Globe size={14} className="text-gray-400"/>
+                            <select value={lang} onChange={(e) => setLang(e.target.value)} className="bg-transparent text-xs text-gray-300 focus:outline-none cursor-pointer font-medium">
+                                <option value="en">EN</option>
+                                <option value="zh-TW">繁體</option>
+                                <option value="zh-CN">简中</option>
+                            </select>
+                        </div>
+                    </div>
+                    {systemMessage && <div className="mt-4 p-3 bg-red-900/30 border border-red-900/50 text-red-400 text-sm rounded-xl text-center">{systemMessage}</div>}
+                </div>
+            </div>
+        );
+    }
 
     // --- 頁面組件 ---
 
@@ -401,11 +430,6 @@ const App = () => {
             ? upcomingEvents[0] 
             : (sortedEvents.length > 0 ? sortedEvents[sortedEvents.length - 1] : null);
         
-        const recommendedEvents = sortedEvents
-            .filter(e => e.id !== featuredEvent?.id)
-            .sort(() => 0.5 - Math.random())
-            .slice(0, 5);
-
         return (
             <div className="p-4 space-y-6 pb-24">
                 <div className="flex justify-between items-center px-1">
@@ -467,14 +491,14 @@ const App = () => {
 
     // 2. 活動詳情與報名 (EventDetail)
     const EventDetail = ({ event }) => {
-        // ✅ 修復重點：所有 Hooks 必須在 return 之前呼叫，即使 event 是 null
+        if (!event) return <div className="p-8 text-center text-white"><Loader2 className="animate-spin mx-auto mb-2"/> Loading...</div>;
+
         const [isRegistering, setIsRegistering] = useState(false);
         const [showCallAlert, setShowCallAlert] = useState(false); 
         const [showQualifyAlert, setShowQualifyAlert] = useState(false);
         const [notificationPermission, setNotificationPermission] = useState(Notification.permission);
         const [wakeLock, setWakeLock] = useState(null);
         
-        // 編輯模式狀態 (使用可選鏈防止 event 為 null 時報錯)
         const [isEditing, setIsEditing] = useState(false);
         const [editForm, setEditForm] = useState({ 
             ...event, 
@@ -489,24 +513,54 @@ const App = () => {
         const audioRef = useRef(null);
         const prevQualifiedRoundRef = useRef(registration?.qualifiedRound || 1);
 
-        // 🛑 安全檢查：如果沒有 event 資料，顯示 Loading 畫面
-        if (!event) return <div className="p-8 text-center text-white"><Loader2 className="animate-spin mx-auto mb-2"/> Loading event data...</div>;
-
         const getMapLink = () => event.googleMapLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.region)}`;
+
+        const requestNotificationPermission = async () => {
+            try {
+                const permission = await Notification.requestPermission();
+                setNotificationPermission(permission);
+            } catch(e) { console.log("Notify error", e); }
+        };
+
+        const requestWakeLock = async () => {
+            try {
+                if ('wakeLock' in navigator) {
+                    const lock = await navigator.wakeLock.request('screen');
+                    setWakeLock(lock);
+                    lock.addEventListener('release', () => setWakeLock(null));
+                }
+            } catch (err) { console.log("WakeLock error", err); }
+        };
+
+        useEffect(() => {
+            requestWakeLock();
+            const handleVisibilityChange = () => {
+                if (document.visibilityState === 'visible') requestWakeLock();
+            };
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+            return () => {
+                if (wakeLock) wakeLock.release().catch(()=>{});
+                document.removeEventListener('visibilitychange', handleVisibilityChange);
+            };
+        }, []);
 
         useEffect(() => {
             if (registration?.called) {
                 setShowCallAlert(true);
                 if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 1000]); 
                 if (audioRef.current) audioRef.current.play().catch(e => console.log("Autoplay blocked:", e));
+                if (Notification.permission === 'granted') {
+                    try { new Notification(t('itsYourTurn'), { body: t('pleaseGoToStage'), icon: '/vite.svg' }); } catch(e){}
+                }
             }
         }, [registration?.called]);
 
         useEffect(() => {
             if (registration && registration.qualifiedRound > prevQualifiedRoundRef.current) {
                 setShowQualifyAlert(true);
-                if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500, 100, 500]); 
-                if (audioRef.current) audioRef.current.play().catch(e => console.log("Autoplay blocked:", e));
+                if (Notification.permission === 'granted') {
+                    try { new Notification(t('qualifyAlertTitle'), { body: t('qualifyAlertMsg') }); } catch(e){}
+                }
                 prevQualifiedRoundRef.current = registration.qualifiedRound;
             }
         }, [registration?.qualifiedRound]);
@@ -546,6 +600,7 @@ const App = () => {
                 const docRef = await addDoc(regCollectionRef, newReg);
                 setMyRegistrations(prev => [...prev, { id: docRef.id, ...newReg }]);
                 navigate('registerSuccess', { ...event, temp: true });
+                requestNotificationPermission();
             } catch (e) {
                 console.error(e); 
                 alert(`報名失敗: ${e.message}`);
@@ -878,6 +933,7 @@ const App = () => {
         );
     };
 
+    // 4. My Events
     const MyEvents = () => {
         const myJoinedEvents = events.filter(e => myRegistrations.some(r => r.eventId === e.id));
         return (
@@ -914,7 +970,10 @@ const App = () => {
         );
     };
 
+    // 5. Management List
     const ManagementList = () => {
+        // ✅ 安全檢查：如果 user 不存在，直接回傳 null，防止白畫面
+        if (!user) return null;
         const myHostedEvents = events.filter(e => e.creatorId === user.uid);
         return (
              <div className="p-4 space-y-4 pb-24">
@@ -1053,7 +1112,7 @@ const App = () => {
                 <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
                     <label className="text-xs text-gray-400 block mb-1">{t('category')}</label>
                     <select value={currentCategory} onChange={e => setCurrentCategory(e.target.value)} className="w-full p-2 bg-gray-900 text-white rounded border border-gray-600">
-                        {event.categories && event.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                        {event.categories.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                 </div>
 
