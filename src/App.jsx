@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction, collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
-// ✅ 修正 1: 將 User 圖示改名為 UserIcon，避免跟使用者變數 user 衝突
-import { MapPin, Calendar, Users, PlusCircle, LayoutList, CheckCircle, ChevronLeft, Loader2, Megaphone, Settings, ListChecks, Shuffle, TrendingUp, XCircle, DollarSign, ExternalLink, CreditCard, Grid, Play, SkipForward, Hash, Globe, BellRing, Search, Star, Heart, Trophy, AlertCircle, Trash2, Sparkles, Flag, Crown, Swords, Timer, ClipboardList, User as UserIcon, LogOut, Mail, Lock, KeyRound, Copy, Bell, Zap } from 'lucide-react';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction, collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
+import { MapPin, Calendar, Users, PlusCircle, LayoutList, CheckCircle, ChevronLeft, Loader2, Megaphone, Settings, ListChecks, Shuffle, TrendingUp, XCircle, DollarSign, ExternalLink, CreditCard, Grid, Play, SkipForward, Hash, Globe, BellRing, Search, Star, Heart, Trophy, AlertCircle, Trash2, Sparkles, Flag, Crown, Swords, Timer, ClipboardList, User as UserIcon, LogOut, Mail, Lock, KeyRound, Copy, Bell, Zap, Dices } from 'lucide-react';
 
 // --- 請修改這裡 (填入您的 Firebase 資料) ---
 const appId = 'dance-event-demo-01'; 
@@ -18,7 +17,18 @@ const firebaseConfig = {
     measurementId: "G-WSX5WGW02B"
   };
 
-const initialAuthToken = null;
+// --- 初始化 Firebase ---
+let app, auth, db;
+try {
+  if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("請填入")) {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    setPersistence(auth, browserLocalPersistence).catch(console.error);
+  }
+} catch (e) {
+  console.error("Firebase Init Failed:", e);
+}
 
 // --- 翻譯字典 ---
 const translations = {
@@ -55,9 +65,10 @@ const translations = {
         openMap: "開啟地圖",
         paymentInfoTitle: "繳費資訊",
         qrCode: "收款碼",
-        randomRegisterBtn: "隨機抽取 賽道/號碼 報名",
+        randomRegisterBtn: "立即報名 (等待抽籤)",
         processing: "處理中...",
-        registered: "已報名！",
+        registered: "已報名",
+        waitingForDraw: "等待報到與抽籤...",
         yourNumber: "您的賽道與號碼",
         manageEventBtn: "進入賽事管理",
         statusCheckedIn: "已報到",
@@ -66,8 +77,8 @@ const translations = {
         statusNotPaid: "未付費",
         lane: "賽道",
         congrats: "報名成功！",
-        successMsg: "您參加",
-        rememberPayment: "請記得查看繳費資訊。",
+        successMsg: "您已成功登記",
+        rememberPayment: "請記得查看繳費資訊並前往現場報到。",
         basicInfo: "基本資訊",
         eventNamePh: "活動名稱",
         eventRegionPh: "地點/地區",
@@ -92,6 +103,7 @@ const translations = {
         publishBtn: "發佈",
         tabCalling: "叫號",
         tabCheckIn: "報到",
+        tabAssignment: "抽籤", 
         tabProgression: "晉級",
         currentCall: "目前舞台 (On Stage)",
         callStrategy: "叫號設定",
@@ -107,7 +119,9 @@ const translations = {
         qualifiedPlayers: "符合資格",
         startDraw: "開始抽籤",
         drawing: "抽籤中...",
-        drawWarning: "抽籤前請確認賽道設定！",
+        drawWarning: "警告：這將為所有「已報到+已繳費」的選手分配號碼！",
+        generateDrawBtn: "生成號碼 (需報到+繳費)",
+        drawStats: "符合資格：{n} 人 (已報到+已繳費)",
         navHome: "首頁",
         navCreate: "發佈",
         navMy: "我的",
@@ -121,7 +135,7 @@ const translations = {
         createFail: "發佈失敗",
         registerProcessing: "報名中...",
         registerFail: "報名失敗",
-        drawSuccess: "✅ 抽籤完成！",
+        drawSuccess: "✅ 抽籤完成！號碼已分配。",
         callSuccess: "叫號成功",
         callFail: "叫號失敗",
         calculatingNext: "計算中...",
@@ -213,13 +227,14 @@ const translations = {
         openMap: "Map",
         paymentInfoTitle: "Payment",
         qrCode: "QR Code",
-        randomRegisterBtn: "Register (Random Lane/Num)",
+        randomRegisterBtn: "Register (Wait for Draw)",
         processing: "Processing...",
-        registered: "Joined!",
+        registered: "Registered",
+        waitingForDraw: "Waiting for check-in...",
         yourNumber: "Your #",
         manageEventBtn: "Dashboard",
-        statusCheckedIn: "In",
-        statusNotCheckedIn: "Out",
+        statusCheckedIn: "Checked In",
+        statusNotCheckedIn: "Not Checked In",
         statusPaid: "Paid",
         statusNotPaid: "Unpaid",
         lane: "Lane",
@@ -252,6 +267,7 @@ const translations = {
         manageTitle: "Manage",
         tabCalling: "Call",
         tabCheckIn: "CheckIn",
+        tabAssignment: "Draw",
         tabProgression: "Rounds",
         currentCall: "On Stage",
         callStrategy: "Strategy",
@@ -267,7 +283,9 @@ const translations = {
         qualifiedPlayers: "Qualified",
         startDraw: "Draw",
         drawing: "Drawing...",
-        drawWarning: "Check lane settings!",
+        drawWarning: "This will re-assign numbers for PAID & CHECKED-IN players!",
+        generateDrawBtn: "Generate (Paid & In Only)",
+        drawStats: "Eligible: {n} (Paid + In)",
         navHome: "Home",
         navCreate: "Create",
         navMy: "My Events",
@@ -281,7 +299,7 @@ const translations = {
         createFail: "Failed",
         registerProcessing: "Registering...",
         registerFail: "Failed",
-        drawSuccess: "✅ Done!",
+        drawSuccess: "✅ Draw Complete!",
         callSuccess: "Called",
         callFail: "Failed",
         calculatingNext: "Calculating...",
@@ -360,15 +378,12 @@ const getLaneName = (index) => String.fromCharCode(65 + index);
 // --- 主應用程式組件 ---
 
 const App = () => {
-    const [db, setDb] = useState(null);
-    const [auth, setAuth] = useState(null);
     const [user, setUser] = useState(null); 
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [loading, setLoading] = useState(true);
     const [systemMessage, setSystemMessage] = useState('');
-    const [lang, setLang] = useState('en'); // 預設英文
+    const [lang, setLang] = useState('en'); 
 
-    // 登入表單狀態
     const [authEmail, setAuthEmail] = useState('');
     const [authPassword, setAuthPassword] = useState('');
     const [isRegisteringMode, setIsRegisteringMode] = useState(false);
@@ -382,46 +397,31 @@ const App = () => {
 
     const t = (key) => translations[lang]?.[key] || translations['zh-TW'][key] || key;
 
-    // --- Firebase 初始化 ---
+    // --- Firebase 狀態監聽 ---
     useEffect(() => {
-        if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("請填入")) {
-            setSystemMessage("請設定 Firebase API Key (請看程式碼最上方)");
+        if (!auth) {
+            setSystemMessage("Firebase 初始化失敗，請檢查 Config");
             setLoading(false);
             return;
         }
-        try {
-            const app = initializeApp(firebaseConfig);
-            const firebaseAuth = getAuth(app);
-            const firestoreDb = getFirestore(app);
-            setDb(firestoreDb);
-            setAuth(firebaseAuth);
-            
-            const unsubscribe = onAuthStateChanged(firebaseAuth, async (currentUser) => {
-                // 🔥 關鍵修改：如果偵測到是「匿名 (Anonymous)」用戶，強制登出！
-                if (currentUser && currentUser.isAnonymous) {
-                    console.log("偵測到舊的匿名帳號，正在清除...");
-                    await signOut(firebaseAuth);
-                    setUser(null); // 清空使用者狀態，強制顯示登入頁面
-                } else {
-                    setUser(currentUser);
-                }
 
-                setIsAuthReady(true);
-                setLoading(false);
-                
-                if (currentUser && !currentUser.isAnonymous) {
-                    setAuthEmail('');
-                    setAuthPassword('');
-                }
-            });
-            return () => unsubscribe();
-        } catch (e) {
-            console.error(e);
+        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+            if (currentUser && currentUser.isAnonymous) {
+                await signOut(auth);
+                setUser(null);
+            } else {
+                setUser(currentUser);
+            }
+            setIsAuthReady(true);
             setLoading(false);
-        }
+            if (currentUser && !currentUser.isAnonymous) {
+                setAuthEmail('');
+                setAuthPassword('');
+            }
+        });
+        return () => unsubscribe();
     }, []);
 
-    // --- 登入/註冊邏輯 ---
     const handleAuth = async (e) => {
         e.preventDefault();
         setSystemMessage("Processing...");
@@ -430,6 +430,7 @@ const App = () => {
                 await createUserWithEmailAndPassword(auth, authEmail, authPassword);
                 setSystemMessage("Registered successfully!");
             } else {
+                await setPersistence(auth, browserLocalPersistence);
                 await signInWithEmailAndPassword(auth, authEmail, authPassword);
                 setSystemMessage("Logged in successfully!");
             }
@@ -451,7 +452,6 @@ const App = () => {
         navigate('browse');
     };
 
-    // --- 資料獲取 ---
     const fetchEvents = useCallback(async () => {
         if (!isAuthReady || !db) return;
         try {
@@ -460,7 +460,7 @@ const App = () => {
             const querySnapshot = await getDocs(q);
             const fetchedEvents = querySnapshot.docs.map(doc => ({ 
                 id: doc.id, 
-                ...doc.data(),
+                ...doc.data(), 
                 laneCount: doc.data().laneCount || 4,
                 laneCapacity: doc.data().laneCapacity || 50, 
                 googleMapLink: doc.data().googleMapLink || '',
@@ -508,49 +508,7 @@ const App = () => {
         window.scrollTo(0, 0);
     };
 
-    if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white"><Loader2 className="animate-spin mr-2" size={24} /> Loading...</div>;
-
-    if (!user) {
-        return (
-            <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
-                <div className="w-full max-w-md bg-gray-900 p-8 rounded-3xl border border-gray-800 shadow-2xl">
-                    <h1 className="text-3xl font-black text-white mb-2 text-center flex items-center justify-center"><span className="text-red-600 mr-2">⚡</span> {t('appTitle')}</h1>
-                    <p className="text-gray-400 text-center mb-8 text-sm">{isRegisteringMode ? t('registerTitle') : t('loginTitle')}</p>
-                    <form onSubmit={handleAuth} className="space-y-4">
-                        <div className="bg-gray-800 p-2 rounded-xl border border-gray-700 flex items-center">
-                            <Mail className="text-gray-500 ml-2" size={20}/>
-                            <input type="email" placeholder={t('emailPh')} value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="bg-transparent flex-1 p-2 text-white outline-none ml-2" required />
-                        </div>
-                        <div className="bg-gray-800 p-2 rounded-xl border border-gray-700 flex items-center">
-                            <Lock className="text-gray-500 ml-2" size={20}/>
-                            <input type="password" placeholder={t('passwordPh')} value={authPassword} onChange={e => setAuthPassword(e.target.value)} className="bg-transparent flex-1 p-2 text-white outline-none ml-2" required />
-                        </div>
-                        <button type="submit" className="w-full bg-gradient-to-r from-red-600 to-red-800 text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition">
-                            {isRegisteringMode ? t('registerBtn') : t('loginBtn')}
-                        </button>
-                    </form>
-                    <div className="mt-6 text-center">
-                        <button onClick={() => setIsRegisteringMode(!isRegisteringMode)} className="text-gray-500 hover:text-white text-sm transition">
-                            {isRegisteringMode ? t('switchToLogin') : t('switchToRegister')}
-                        </button>
-                    </div>
-                    <div className="mt-6 flex justify-center">
-                        <div className="flex items-center gap-2 bg-gray-800 rounded-full px-3 py-1.5 border border-gray-700">
-                            <Globe size={14} className="text-gray-400"/>
-                            <select value={lang} onChange={(e) => setLang(e.target.value)} className="bg-transparent text-xs text-gray-300 focus:outline-none cursor-pointer font-medium">
-                                <option value="en">English</option>
-                                <option value="zh-TW">繁體中文</option>
-                                <option value="zh-CN">简体中文</option>
-                            </select>
-                        </div>
-                    </div>
-                    {systemMessage && <div className="mt-4 p-3 bg-red-900/30 border border-red-900/50 text-red-400 text-sm rounded-xl text-center">{systemMessage}</div>}
-                </div>
-            </div>
-        );
-    }
-
-    // --- 組件 ---
+    // --- 頁面組件 ---
 
     const EventList = () => {
         const [filterRegion, setFilterRegion] = useState('');
@@ -611,6 +569,8 @@ const App = () => {
     };
 
     const EventDetail = ({ event }) => {
+        if (!event) return <div className="p-8 text-center text-white"><Loader2 className="animate-spin mx-auto mb-2"/> Loading event data...</div>;
+
         const [isRegistering, setIsRegistering] = useState(false);
         const [showCallAlert, setShowCallAlert] = useState(false); 
         const [showQualifyAlert, setShowQualifyAlert] = useState(false);
@@ -623,45 +583,36 @@ const App = () => {
         const audioRef = useRef(null);
         const prevQualifiedRoundRef = useRef(registration?.qualifiedRound || 1);
 
-        const getMapLink = () => event.googleMapLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.region)}`;
+        const getMapLink = () => event.googleMapLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.region || '')}`;
 
-        // 請求通知權限
         const requestNotificationPermission = async () => {
-            const permission = await Notification.requestPermission();
-            setNotificationPermission(permission);
-            if (permission === 'granted') {
-                new Notification(t('appTitle'), { body: t('notifyEnabled') });
-            }
+            try {
+                const permission = await Notification.requestPermission();
+                setNotificationPermission(permission);
+                if (permission === 'granted') {
+                    try { new Notification(t('appTitle'), { body: t('notifyEnabled') }); } catch(e){}
+                }
+            } catch(e) { console.log("Notify error", e); }
         };
 
-        // 嘗試啟用螢幕恆亮
         const requestWakeLock = async () => {
             try {
                 if ('wakeLock' in navigator) {
                     const lock = await navigator.wakeLock.request('screen');
                     setWakeLock(lock);
-                    lock.addEventListener('release', () => {
-                        console.log('Wake Lock released');
-                        setWakeLock(null);
-                    });
+                    lock.addEventListener('release', () => setWakeLock(null));
                 }
-            } catch (err) {
-                console.error(`${err.name}, ${err.message}`);
-            }
+            } catch (err) { console.log("WakeLock error", err); }
         };
 
-        // 當進入頁面時自動嘗試 Wake Lock
         useEffect(() => {
             requestWakeLock();
-            // 頁面可見性改變時重新申請 (因為切換視窗會失效)
             const handleVisibilityChange = () => {
-                if (document.visibilityState === 'visible') {
-                    requestWakeLock();
-                }
+                if (document.visibilityState === 'visible') requestWakeLock();
             };
             document.addEventListener('visibilitychange', handleVisibilityChange);
             return () => {
-                if (wakeLock) wakeLock.release();
+                if (wakeLock) wakeLock.release().catch(()=>{});
                 document.removeEventListener('visibilitychange', handleVisibilityChange);
             };
         }, []);
@@ -671,12 +622,13 @@ const App = () => {
                 setShowCallAlert(true); 
                 if (audioRef.current) audioRef.current.play().catch(()=>{}); 
                 
-                // 發送系統通知
                 if (Notification.permission === 'granted') {
-                    new Notification(t('itsYourTurn'), { 
-                        body: t('pleaseGoToStage'),
-                        icon: '/vite.svg' // 預設圖示
-                    });
+                    try {
+                        new Notification(t('itsYourTurn'), { 
+                            body: t('pleaseGoToStage'),
+                            icon: '/vite.svg'
+                        });
+                    } catch(e){}
                 }
             }
         }, [registration?.called]);
@@ -685,7 +637,7 @@ const App = () => {
             if (registration && registration.qualifiedRound > prevQualifiedRoundRef.current) {
                 setShowQualifyAlert(true);
                 if (Notification.permission === 'granted') {
-                    new Notification(t('qualifyAlertTitle'), { body: t('qualifyAlertMsg') });
+                    try { new Notification(t('qualifyAlertTitle'), { body: t('qualifyAlertMsg') }); } catch(e){}
                 }
                 prevQualifiedRoundRef.current = registration.qualifiedRound;
             }
@@ -696,38 +648,31 @@ const App = () => {
             setIsRegistering(true);
             setSystemMessage(t('registerProcessing'));
             try {
-                const laneCount = event.laneCount || 4;
-                const laneCapacity = event.laneCapacity || 50;
-                const maxTotal = laneCount * laneCapacity;
                 const regCollectionRef = collection(db, `artifacts/${appId}/public/data/registrations`);
-                const q = query(regCollectionRef, where("eventId", "==", event.id));
-                let assignedLane = '';
-                let assignedNumber = 0;
+                const q = query(regCollectionRef, where("eventId", "==", event.id), where("userId", "==", user.uid));
+                const snapshot = await getDocs(q);
+                
+                if (!snapshot.empty) {
+                    throw new Error("Already registered");
+                }
 
-                await runTransaction(db, async (transaction) => {
-                    const snapshot = await getDocs(q); 
-                    const occupied = new Set(snapshot.docs.map(d => `${d.data().laneAssignment}-${d.data().queueNumber}`));
-                    if (snapshot.size >= maxTotal) throw new Error("Full");
-                    let laneChar, num, key, attempts = 0;
-                    do {
-                        const randomLaneIdx = Math.floor(Math.random() * laneCount);
-                        laneChar = getLaneName(randomLaneIdx);
-                        num = Math.floor(Math.random() * laneCapacity) + 1;
-                        key = `${laneChar}-${num}`;
-                        attempts++;
-                    } while (occupied.has(key) && attempts < maxTotal * 3);
-                    if (occupied.has(key)) throw new Error("Failed");
-                    assignedLane = laneChar; assignedNumber = num;
-                });
-
-                const newReg = { eventId: event.id, userId: user.uid, queueNumber: assignedNumber, laneAssignment: assignedLane, registrationTime: serverTimestamp(), checkedIn: false, paid: false, called: false, qualifiedRound: 1 };
+                // 🆕 修正：報名時不分配號碼，只記錄資料
+                const newReg = { 
+                    eventId: event.id, 
+                    userId: user.uid, 
+                    queueNumber: null, 
+                    laneAssignment: null, 
+                    isAssigned: false, // 標記為未分配
+                    registrationTime: serverTimestamp(), 
+                    checkedIn: false, 
+                    paid: false, 
+                    called: false, 
+                    qualifiedRound: 1 
+                };
                 const docRef = await addDoc(regCollectionRef, newReg);
                 setMyRegistrations(prev => [...prev, { id: docRef.id, ...newReg }]);
-                navigate('registerSuccess', { ...event, queueNumber: assignedNumber, laneAssignment: assignedLane });
-                
-                // 報名成功後自動詢問通知權限
+                navigate('registerSuccess', { ...event, temp: true }); // 導向成功頁面
                 requestNotificationPermission();
-
             } catch (e) {
                 console.error(e); setSystemMessage(`${t('registerFail')}: ${e.message}`); setIsRegistering(false);
             }
@@ -737,7 +682,9 @@ const App = () => {
             <div className="flex space-x-2 text-sm mt-3 flex-wrap justify-center gap-2">
                 <span className={`px-3 py-1 rounded-full font-semibold text-xs shadow-sm ${reg.checkedIn ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300 border border-gray-600'}`}>{reg.checkedIn ? `✅ ${t('statusCheckedIn')}` : `⏳ ${t('statusNotCheckedIn')}`}</span>
                 <span className={`px-3 py-1 rounded-full font-semibold text-xs shadow-sm ${reg.paid ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300 border border-gray-600'}`}>{reg.paid ? `💰 ${t('statusPaid')}` : `❌ ${t('statusNotPaid')}`}</span>
-                <span className="px-3 py-1 rounded-full font-semibold text-xs bg-indigo-600 text-white shadow-sm">{t('lane')}: {reg.laneAssignment}</span>
+                {reg.laneAssignment && (
+                    <span className="px-3 py-1 rounded-full font-semibold text-xs bg-indigo-600 text-white shadow-sm">{t('lane')}: {reg.laneAssignment}</span>
+                )}
             </div>
         );
 
@@ -752,7 +699,6 @@ const App = () => {
                 <div className="bg-gray-800 p-6 rounded-3xl shadow-2xl border border-gray-700">
                     <div className="flex justify-between items-start">
                         <h2 className="text-3xl font-black text-white mb-2">{event.name}</h2>
-                        {/* 通知狀態指示燈 */}
                         <div className="flex flex-col items-end gap-2">
                             {notificationPermission !== 'granted' && (
                                 <button onClick={requestNotificationPermission} className="bg-blue-600 text-white p-2 rounded-full shadow-lg animate-pulse">
@@ -780,7 +726,12 @@ const App = () => {
                         ) : (
                             <div className="bg-gray-800 p-4 rounded-2xl border border-green-600 text-center relative">
                                 <p className="text-green-400 font-bold">{t('registered')}</p>
-                                <p className="text-2xl font-black text-white">{registration.laneAssignment}-{formatNumber(registration.queueNumber)}</p>
+                                {/* 🆕 如果有號碼才顯示，否則顯示等待中 */}
+                                {registration.laneAssignment ? (
+                                    <p className="text-2xl font-black text-white">{registration.laneAssignment}-{formatNumber(registration.queueNumber)}</p>
+                                ) : (
+                                    <p className="text-lg text-yellow-400 font-bold animate-pulse my-2">{t('waitingForDraw')}</p>
+                                )}
                                 {renderStatusBadge(registration)}
                                 {notificationPermission !== 'granted' && <p className="text-xs text-blue-400 mt-2 animate-pulse" onClick={requestNotificationPermission}>{t('notifyHint')}</p>}
                             </div>
@@ -792,7 +743,35 @@ const App = () => {
         );
     };
 
-    // 3. 創建活動
+    // 3. 報名成功畫面 (RegistrationSuccess) ... (保持不變)
+    const RegistrationSuccess = ({ event }) => (
+        <div className="p-8 flex flex-col items-center justify-center min-h-[70vh] text-center space-y-8">
+            <div className="relative"><div className="absolute inset-0 bg-green-500/30 blur-3xl rounded-full"></div><CheckCircle size={100} className="text-green-500 relative z-10 animate-bounce"/></div>
+            <div><h2 className="text-4xl font-black text-white mb-2">{t('congrats')}</h2><p className="text-gray-400">{t('successMsg')} <span className="text-white font-bold">{event.name}</span></p></div>
+            <div className="bg-gray-800 p-8 rounded-3xl shadow-2xl w-full border border-gray-700">
+                {/* 🆕 修改成功畫面邏輯 */}
+                {event.laneAssignment ? (
+                    <>
+                        <p className="text-gray-400 text-sm uppercase tracking-widest mb-2">{t('yourNumber')}</p>
+                        <div className="flex justify-center items-baseline text-white font-black tracking-widest">
+                            <span className="text-7xl text-indigo-400">{event.laneAssignment}</span>
+                            <span className="text-5xl mx-2">-</span>
+                            <span className="text-8xl">{formatNumber(event.queueNumber)}</span>
+                        </div>
+                    </>
+                ) : (
+                    <div className="py-4">
+                        <div className="text-yellow-400 text-xl font-bold mb-2">{t('waitingForDraw')}</div>
+                        <p className="text-gray-400 text-sm">請先完成報到手續，主辦單位將在報名截止後進行抽籤分組。</p>
+                    </div>
+                )}
+                <div className="mt-6 pt-6 border-t border-gray-700/50"><p className="text-sm text-yellow-500 font-medium flex items-center justify-center"><CreditCard size={14} className="mr-2"/> {t('rememberPayment')}</p></div>
+            </div>
+            <button onClick={() => navigate('browse')} className="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 rounded-2xl transition">{t('backToHome')}</button>
+        </div>
+    );
+
+    // 4. 創建活動頁面 (CreateEventForm) ... (保持不變)
     const CreateEventForm = () => {
         const [formData, setFormData] = useState({
             name: '', date: '', region: '', description: '', 
@@ -826,15 +805,15 @@ const App = () => {
         };
         return (
             <div className="p-4 pb-24 space-y-4">
-                <button onClick={() => navigate('browse')} className="flex items-center text-gray-400 hover:text-white"><ChevronLeft size={24}/> {t('backToHome')}</button>
+                <button onClick={() => navigate('browse')} className="flex items-center text-gray-400 hover:text-white transition"><ChevronLeft size={24} className="mr-1"/> {t('backToHome')}</button>
                 <h2 className="text-3xl font-bold text-white mb-6">{t('createEventTitle')}</h2>
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="bg-gray-800 p-5 rounded-3xl border border-gray-700 shadow-lg space-y-4">
                         <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">{t('basicInfo')}</h3>
-                        <input type="text" name="name" placeholder={t('eventNamePh')} value={formData.name} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
-                        <input type="datetime-local" name="date" value={formData.date} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
-                        <input type="text" name="region" placeholder={t('eventRegionPh')} value={formData.region} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
-                        <textarea name="description" placeholder={t('descPh')} value={formData.description} onChange={handleChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
+                        <input type="text" name="name" placeholder={t('eventNamePh')} value={formData.name} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
+                        <input type="datetime-local" name="date" value={formData.date} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
+                        <input type="text" name="region" placeholder={t('eventRegionPh')} value={formData.region} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
+                        <textarea name="description" placeholder={t('descPh')} value={formData.description} onChange={handleChange} rows="3" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
                     </div>
                     <div className="bg-gray-800 p-5 rounded-3xl border border-gray-700 shadow-lg space-y-4">
                         <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">{t('compSettingsTitle')}</h3>
@@ -866,7 +845,6 @@ const App = () => {
         );
     };
 
-    // 4. My Events
     const MyEvents = () => {
         const myJoinedEvents = events.filter(e => myRegistrations.some(r => r.eventId === e.id));
         return (
@@ -888,7 +866,12 @@ const App = () => {
                                     <p className="text-sm text-gray-400 flex items-center mb-3"><Calendar size={14} className="mr-2"/> {formatDateTime(event.date)}</p>
                                     <div className="flex items-center justify-between bg-gray-900/50 p-2 rounded-lg">
                                         <span className="text-xs text-gray-500">{t('yourNumber')}</span>
-                                        <span className="text-xl font-black text-indigo-400">{reg.laneAssignment}-{formatNumber(reg.queueNumber)}</span>
+                                        {/* 🆕 如果還沒分配號碼，顯示等待中 */}
+                                        {reg.laneAssignment ? (
+                                            <span className="text-xl font-black text-indigo-400">{reg.laneAssignment}-{formatNumber(reg.queueNumber)}</span>
+                                        ) : (
+                                            <span className="text-xs text-yellow-400 animate-pulse">等待抽籤</span>
+                                        )}
                                     </div>
                                 </div>
                              );
@@ -899,7 +882,6 @@ const App = () => {
         );
     };
 
-    // 5. Management List
     const ManagementList = () => {
         const myHostedEvents = events.filter(e => e.creatorId === user.uid);
         return (
@@ -930,7 +912,7 @@ const App = () => {
 
     // 7. Event Manager (後台) ... (保持完整功能)
     const EventManager = ({ event }) => {
-        const [activeTab, setActiveTab] = useState('calling');
+        const [activeTab, setActiveTab] = useState('checkin'); // 預設改為報到 Tab
         const [allRegistrations, setAllRegistrations] = useState([]);
         const [callStatus, setCallStatus] = useState({ displayNumbers: [], currentSequence: 1 });
         const [isProcessing, setIsProcessing] = useState(false);
@@ -951,7 +933,14 @@ const App = () => {
             });
             const q = query(collection(db, REG_COL_PATH), where("eventId", "==", event.id));
             const unsubscribeRegs = onSnapshot(q, (snapshot) => {
-                setAllRegistrations(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.queueNumber - b.queueNumber));
+                setAllRegistrations(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => {
+                    // 排序邏輯：有號碼的在前，沒號碼的在後
+                    if (a.laneAssignment && b.laneAssignment) {
+                        if (a.laneAssignment === b.laneAssignment) return a.queueNumber - b.queueNumber;
+                        return a.laneAssignment.localeCompare(b.laneAssignment);
+                    }
+                    return 0;
+                }));
             });
             return () => { unsubscribeStatus(); unsubscribeRegs(); };
         }, [db, STATUS_DOC_PATH, REG_COL_PATH, event.id]);
@@ -962,42 +951,84 @@ const App = () => {
             if (!db || isProcessing) return;
             setIsProcessing(true); setSystemMessage(t('calculatingNext'));
             try {
+                // ⚠️ 叫號邏輯修正：只叫「有號碼」且「已報到」的人
                 const availableRegs = allRegistrations.filter(r => r.checkedIn && !r.called && r.laneAssignment);
-                const sortedRegs = [...availableRegs].sort((a, b) => a.queueNumber - b.queueNumber);
+                const sortedRegs = [...availableRegs].sort((a, b) => a.queueNumber - b.queueNumber); // 這裡假設單一賽道或需修改邏輯
+                
+                // ... (保留原本叫號邏輯，但需注意 availableRegs 現在必須有 laneAssignment)
                 let nextDisplayNumbers = []; let updates = []; let nextSeq = callStatus.currentSequence;
 
                 if (callSettings.callMode === 'single') {
-                    if (callSettings.strictSequence) {
-                        nextDisplayNumbers = [nextSeq];
-                        const target = sortedRegs.find(r => r.queueNumber === nextSeq);
-                        if (target) updates.push(target.id);
-                        nextSeq++;
+                    // 簡單處理：直接找下一個有號碼的人 (忽略 sequence 嚴格模式，因為現在號碼是連續的)
+                    if (sortedRegs.length > 0) {
+                        // 這裡需要更聰明的邏輯來決定「誰是下一位」，暫時取排序後的第一位
+                        // 實務上可能需要分賽道叫號
+                        const target = sortedRegs[0];
+                        nextDisplayNumbers = [target.queueNumber]; // 顯示號碼
+                        updates.push(target.id);
                     } else {
-                        if (sortedRegs.length > 0) {
-                            const target = sortedRegs[0];
-                            nextDisplayNumbers = [target.queueNumber];
-                            updates.push(target.id);
-                            nextSeq = target.queueNumber + 1; 
-                        } else {
-                            setSystemMessage(t('noMorePlayers')); setIsProcessing(false); return;
-                        }
+                        setSystemMessage(t('noMorePlayers')); setIsProcessing(false); return;
                     }
                 } else {
+                    // 賽道齊發
                     const lanes = [...new Set(allRegistrations.map(r => r.laneAssignment).filter(l => l))].sort();
                     lanes.forEach(lane => {
-                        const candidate = sortedRegs.find(r => r.laneAssignment === lane);
+                        // 找該賽道號碼最小且未叫號的人
+                        const candidate = availableRegs.filter(r => r.laneAssignment === lane).sort((a, b) => a.queueNumber - b.queueNumber)[0];
                         if (candidate) { nextDisplayNumbers.push(candidate.queueNumber); updates.push(candidate.id); }
                     });
                     if (nextDisplayNumbers.length === 0) { setSystemMessage(t('allLanesEmpty')); setIsProcessing(false); return; }
                 }
 
                 const statusRef = doc(db, STATUS_DOC_PATH);
-                await setDoc(statusRef, { displayNumbers: nextDisplayNumbers, currentSequence: nextSeq, updatedAt: serverTimestamp() }, { merge: true });
+                await setDoc(statusRef, { displayNumbers: nextDisplayNumbers, updatedAt: serverTimestamp() }, { merge: true });
                 for (const regId of updates) { await updateDoc(doc(db, REG_COL_PATH, regId), { called: true }); }
                 setSystemMessage(`${t('callSuccess')}: ${nextDisplayNumbers.join(', ')}`);
             } catch (e) { console.error(e); setSystemMessage(`${t('callFail')}: ${e.message}`); } finally { setIsProcessing(false); }
         };
 
+        // 🆕 抽籤分配邏輯 (Assignment Logic) - 修改版：需已報到 + 已繳費
+        const handleGenerateDraw = async () => {
+            if (!confirm(t('drawWarning'))) return;
+            setIsProcessing(true);
+            setSystemMessage(t('drawing'));
+            try {
+                // 🔍 篩選條件：同時滿足「已報到」和「已繳費」
+                const eligiblePlayers = allRegistrations.filter(r => r.checkedIn && r.paid);
+                
+                if (eligiblePlayers.length === 0) throw new Error("沒有符合資格的選手 (需同時已報到+已繳費)");
+
+                // 1. 隨機打亂
+                const shuffled = [...eligiblePlayers].sort(() => 0.5 - Math.random());
+                
+                // 2. 分配賽道與號碼
+                const batch = writeBatch(db);
+                const laneCount = event.laneCount || 4;
+                
+                shuffled.forEach((reg, index) => {
+                    const laneIndex = index % laneCount; // 0, 1, 2, 3
+                    const laneChar = getLaneName(laneIndex); // A, B, C, D
+                    const number = Math.floor(index / laneCount) + 1; // 1, 1, 1, 1, 2, 2...
+                    
+                    const ref = doc(db, REG_COL_PATH, reg.id);
+                    batch.update(ref, {
+                        laneAssignment: laneChar,
+                        queueNumber: number,
+                        isAssigned: true
+                    });
+                });
+
+                await batch.commit();
+                setSystemMessage(t('drawSuccess'));
+            } catch (e) {
+                console.error(e);
+                setSystemMessage(`Error: ${e.message}`);
+            } finally {
+                setIsProcessing(false);
+            }
+        };
+
+        // ... (省略 7 to Smoke, Tournament, handleTournamentWin 保持不變，請複製貼上完整版) ...
         const handleStart7toSmoke = async () => {
             const qualified = allRegistrations.filter(r => r.qualifiedRound === event.currentRound);
             if (qualified.length !== 8) { setSystemMessage(t('smokeReq')); return; }
@@ -1034,7 +1065,7 @@ const App = () => {
             await updateDoc(EVENT_DOC_REF, { tournamentState: { matches: newMatches } });
         };
 
-        // Sub-components (defined inside EventManager to access state)
+        // Sub-components
         const CallingStatusTab = () => {
             const displayNums = callStatus.displayNumbers;
             return (
@@ -1043,7 +1074,6 @@ const App = () => {
                          <h3 className="text-sm text-gray-400 mb-2 flex items-center"><Settings size={14} className="mr-1"/> {t('callStrategy')}</h3>
                          <div className="flex flex-col gap-2">
                             <div className="flex items-center justify-between"><span className="text-white text-sm">{t('mode')}:</span><div className="flex bg-gray-700 rounded p-1"><button onClick={() => saveCallSettings({...callSettings, callMode: 'single'})} className={`px-3 py-1 text-xs rounded transition ${callSettings.callMode === 'single' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>{t('modeSingle')}</button><button onClick={() => saveCallSettings({...callSettings, callMode: 'all_lanes'})} className={`px-3 py-1 text-xs rounded transition ${callSettings.callMode === 'all_lanes' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>{t('modeAllLanes')}</button></div></div>
-                            {callSettings.callMode === 'single' && <div className="flex items-center justify-between"><span className="text-white text-sm">{t('emptyStrategy')}:</span><div className="flex bg-gray-700 rounded p-1"><button onClick={() => saveCallSettings({...callSettings, strictSequence: false})} className={`px-3 py-1 text-xs rounded transition ${!callSettings.strictSequence ? 'bg-green-600 text-white' : 'text-gray-400'}`}>{t('skipEmpty')}</button><button onClick={() => saveCallSettings({...callSettings, strictSequence: true})} className={`px-3 py-1 text-xs rounded transition ${callSettings.strictSequence ? 'bg-red-600 text-white' : 'text-gray-400'}`}>{t('keepEmpty')}</button></div></div>}
                          </div>
                     </div>
                     <div className="bg-gray-800 p-6 rounded-xl shadow-inner border-b-4 border-red-500 text-center"><p className="text-lg text-red-300 font-semibold mb-3">{t('currentCall')}</p><div className="flex justify-center items-center gap-4 flex-wrap min-h-[100px]">{displayNums.length > 0 ? displayNums.map((num, idx) => (<div key={idx} className="text-6xl font-black text-white p-4 bg-red-700 rounded-xl shadow-lg border-2 border-red-400 min-w-[100px] animate-in zoom-in duration-300">{formatNumber(num)}</div>)) : <span className="text-4xl text-gray-500">--</span>}</div></div>
@@ -1074,7 +1104,33 @@ const App = () => {
             const filteredRegs = allRegistrations.filter(reg => reg.queueNumber.toString().includes(searchTerm));
             const total = allRegistrations.length; const checkedInCount = allRegistrations.filter(r => r.checkedIn).length; const paidCount = allRegistrations.filter(r => r.paid).length;
             return (
-                <div className="space-y-4"><div className="bg-gray-800 p-4 rounded-xl border border-gray-600 space-y-3"><div className="flex justify-between text-xs text-gray-400 px-1"><span>{t('statsTotal')}: {total}</span><span className="text-green-400">{t('statsCheckedIn')}: {checkedInCount}</span><span className="text-yellow-400">{t('statsPaid')}: {paidCount}</span></div><div className="relative"><Search className="absolute left-3 top-2.5 text-gray-500" size={16} /><input type="number" placeholder={t('searchPlaceholder')} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-gray-900 text-white pl-10 pr-4 py-2 rounded-lg border border-gray-700 focus:border-indigo-500 outline-none placeholder-gray-600"/></div></div><div className="max-h-96 overflow-y-auto bg-gray-900 rounded-lg p-2 space-y-2">{filteredRegs.length > 0 ? filteredRegs.map(reg => (<div key={reg.id} className={`flex flex-col p-3 bg-gray-800 rounded-lg border-l-4 transition ${reg.called ? 'border-gray-500 opacity-60' : 'border-yellow-500'}`}><div className="flex justify-between items-start mb-2"><div><span className="text-3xl font-black text-white mr-2">{formatNumber(reg.queueNumber)}</span>{reg.called && <span className="text-xs bg-gray-600 px-2 py-0.5 rounded text-white inline-block">{t('called')}</span>}</div><div className="text-right">{reg.laneAssignment ? <span className="text-xs font-bold text-indigo-400 bg-indigo-900/30 px-2 py-1 rounded">{reg.laneAssignment}</span> : <span className="text-xs text-gray-500">--</span>}</div></div><div className="grid grid-cols-2 gap-2"><button onClick={() => handleToggle(reg.id, 'paid')} className={`flex items-center justify-center px-3 py-2 rounded-lg text-sm font-bold transition border ${reg.paid ? 'bg-green-600 border-green-600 text-white' : 'bg-transparent border-gray-600 text-gray-400'}`}><DollarSign size={14} className="mr-1"/> {reg.paid ? t('statusPaid') : t('statusNotPaid')}</button><button onClick={() => handleToggle(reg.id, 'checkedIn')} className={`flex items-center justify-center px-3 py-2 rounded-lg text-sm font-bold transition border ${reg.checkedIn ? 'bg-blue-600 border-blue-600 text-white' : 'bg-transparent border-gray-600 text-gray-400'}`}><ListChecks size={14} className="mr-1"/> {reg.checkedIn ? t('statusCheckedIn') : t('statusNotCheckedIn')}</button></div></div>)) : <p className="text-center text-gray-500 py-8">{t('noResult')}</p>}</div></div>
+                <div className="space-y-4"><div className="bg-gray-800 p-4 rounded-xl border border-gray-600 space-y-3"><div className="flex justify-between text-xs text-gray-400 px-1"><span>{t('statsTotal')}: {total}</span><span className="text-green-400">{t('statsCheckedIn')}: {checkedInCount}</span><span className="text-yellow-400">{t('statsPaid')}: {paidCount}</span></div><div className="relative"><Search className="absolute left-3 top-2.5 text-gray-500" size={16} /><input type="number" placeholder={t('searchPlaceholder')} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-gray-900 text-white pl-10 pr-4 py-2 rounded-lg border border-gray-700 focus:border-indigo-500 outline-none placeholder-gray-600"/></div></div><div className="max-h-96 overflow-y-auto bg-gray-900 rounded-lg p-2 space-y-2">{filteredRegs.length > 0 ? filteredRegs.map(reg => (<div key={reg.id} className={`flex flex-col p-3 bg-gray-800 rounded-lg border-l-4 transition ${reg.checkedIn ? 'border-green-500' : 'border-gray-600'}`}><div className="flex justify-between items-start mb-2"><div><span className="text-3xl font-black text-white mr-2">{formatNumber(reg.queueNumber)}</span>{reg.called && <span className="text-xs bg-gray-600 px-2 py-0.5 rounded text-white inline-block">{t('called')}</span>}</div><div className="text-right">{reg.laneAssignment ? <span className="text-xs font-bold text-indigo-400 bg-indigo-900/30 px-2 py-1 rounded">{reg.laneAssignment}</span> : <span className="text-xs text-gray-500">--</span>}</div></div><div className="grid grid-cols-2 gap-2"><button onClick={() => handleToggle(reg.id, 'paid')} className={`flex items-center justify-center px-3 py-2 rounded-lg text-sm font-bold transition border ${reg.paid ? 'bg-yellow-600/20 border-yellow-600 text-yellow-400' : 'bg-transparent border-gray-600 text-gray-400'}`}><DollarSign size={14} className="mr-1"/> {reg.paid ? t('statusPaid') : t('statusNotPaid')}</button><button onClick={() => handleToggle(reg.id, 'checkedIn')} className={`flex items-center justify-center px-3 py-2 rounded-lg text-sm font-bold transition border ${reg.checkedIn ? 'bg-green-600/20 border-green-600 text-green-400' : 'bg-transparent border-gray-600 text-gray-400'}`}><ListChecks size={14} className="mr-1"/> {reg.checkedIn ? t('statusCheckedIn') : t('statusNotCheckedIn')}</button></div></div>)) : <p className="text-center text-gray-500 py-8">{t('noResult')}</p>}</div></div>
+            );
+        };
+
+        // 🆕 新增：抽籤分配頁面
+        const AssignmentTab = () => {
+            // 🔍 修改計數：符合資格者 (已報到 + 已繳費)
+            const eligibleCount = allRegistrations.filter(r => r.checkedIn && r.paid).length;
+            return (
+                <div className="space-y-6">
+                    <div className="bg-gray-800 p-6 rounded-xl border border-gray-600 text-center">
+                        <Dices size={48} className="mx-auto text-indigo-400 mb-4"/>
+                        <h3 className="text-xl font-bold text-white mb-2">{t('randomAssignTitle')}</h3>
+                        {/* 顯示符合資格人數 */}
+                        <p className="text-gray-400 mb-6">{t('drawStats').replace('{n}', eligibleCount)}</p>
+                        
+                        <button 
+                            onClick={handleGenerateDraw} 
+                            disabled={isProcessing || eligibleCount === 0}
+                            className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 text-white font-bold py-4 rounded-xl shadow-lg transition flex items-center justify-center"
+                        >
+                            {isProcessing ? <Loader2 className="animate-spin mr-2"/> : <Shuffle size={20} className="mr-2"/>}
+                            {t('generateDrawBtn')}
+                        </button>
+                        <p className="text-xs text-red-400 mt-3">{t('drawWarning')}</p>
+                    </div>
+                </div>
             );
         };
 
@@ -1134,10 +1190,11 @@ const App = () => {
         const renderContent = () => {
             if (event.callMode === '7tosmoke') return <SevenToSmokeUI />;
             if (event.callMode === 'tournament') return <TournamentUI />;
-            if (activeTab === 'calling') return <CallingStatusTab />;
             if (activeTab === 'checkin') return <CheckInTab />;
+            if (activeTab === 'assignment') return <AssignmentTab />;
+            if (activeTab === 'calling') return <CallingStatusTab />;
             if (activeTab === 'progression') return <ProgressionTab />;
-            return <CallingStatusTab />;
+            return <CheckInTab />;
         };
 
         return (
@@ -1145,7 +1202,8 @@ const App = () => {
                 <button onClick={() => navigate('detail', event)} className="flex items-center text-gray-400 hover:text-white mb-4"><ChevronLeft size={24}/> {t('backToEvents')}</button>
                 <h2 className="text-2xl font-bold text-white">{event.name} - {t('manageTitle')}</h2>
                 <div className="flex bg-gray-800 rounded-xl overflow-hidden shadow-lg p-1">
-                    {[ {k:'calling',l:t('tabCalling'),i:Megaphone}, {k:'checkin',l:t('tabCheckIn'),i:ListChecks}, {k:'progression',l:t('tabProgression'),i:TrendingUp} ].map(tb => (
+                    {/* 🆕 調整分頁按鈕順序 */}
+                    {[ {k:'checkin',l:t('tabCheckIn'),i:ListChecks}, {k:'assignment',l:t('tabAssignment'),i:Shuffle}, {k:'calling',l:t('tabCalling'),i:Megaphone}, {k:'progression',l:t('tabProgression'),i:TrendingUp} ].map(tb => (
                         <button key={tb.k} onClick={() => setActiveTab(tb.k)} className={`flex-1 py-3 text-xs font-bold rounded-lg flex flex-col justify-center items-center gap-1 transition ${activeTab===tb.k?'bg-gray-700 text-white shadow-sm':'text-gray-500 hover:text-gray-300'}`}><tb.i size={18}/>{tb.l}</button>
                     ))}
                 </div>
