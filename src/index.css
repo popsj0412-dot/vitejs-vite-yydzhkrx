@@ -6,6 +6,6 @@ body {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  background-color: #000; /* 預設黑色背景，避免載入閃爍 */
+  background-color: #000;
   color: #fff;
 }
