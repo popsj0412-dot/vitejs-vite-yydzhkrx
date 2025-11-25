@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction, collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { MapPin, Calendar, Users, PlusCircle, LayoutList, CheckCircle, ChevronLeft, Loader2, Megaphone, Settings, ListChecks, Shuffle, TrendingUp, XCircle, DollarSign, ExternalLink, CreditCard, Grid, Play, SkipForward, Hash, Globe, BellRing, Search, Star, Heart, Trophy, AlertCircle, Trash2, Sparkles, Flag, Crown, Swords, Timer, ClipboardList, User as UserIcon, LogOut, Mail, Lock, KeyRound, Copy, Bell, Zap, Dices, Edit, Save, Image as ImageIcon, Printer, FileText, X, Plus, AlertTriangle } from 'lucide-react';
 
 // --- 設定與初始化 ---
@@ -37,7 +37,9 @@ const translations = {
         rememberPayment: "請記得查看繳費資訊並前往現場報到。", basicInfo: "基本資訊", eventNamePh: "活動名稱", eventRegionPh: "地點/地區", mapLinkPh: "📍 地圖連結 (可選)",
         bannerUrlPh: "🖼️ 活動封面圖片網址 (可選)", descPh: "活動描述...", eventFormatLabel: "主要賽制", categoriesLabel: "比賽組別/風格 (Categories)",
         categoryPh: "輸入組別名稱 (例如: Breaking)", compSettingsTitle: "賽事與賽道規格", laneCountPh: "賽道數量", laneCapacityPh: "每賽道人數上限",
-        paymentSettingsTitle: "繳費設定", paymentDescPh: "繳費說明...", paymentQrPh: "🔗 收款碼圖片連結 (可選)", roundConfigTitle: "賽制輪次規劃", roundConfigDesc: "設定每一輪預計晉級的人數",
+        paymentSettingsTitle: "繳費設定", paymentDescPh: "繳費說明...", paymentQrPh: "🔗 收款碼圖片連結 (可選)", 
+        paymentLinkPh: "💳 Stripe / 支付連結 (可選)", payNowBtn: "前往繳費", // 🆕 新增翻譯
+        roundConfigTitle: "賽制輪次規劃", roundConfigDesc: "設定每一輪預計晉級的人數",
         publishBtn: "發佈活動", tabCalling: "叫號", tabCheckIn: "報到/名單", tabAssignment: "抽籤", currentCall: "目前舞台", callStrategy: "叫號設定",
         mode: "模式", modeSingle: "單人", modeAllLanes: "賽道齊發", callNext: "叫下一位", randomAssignTitle: "隨機分道抽籤",
         drawWarning: "警告：這將重新分配所有「已報到+已繳費」選手的號碼！", generateDrawBtn: "生成號碼 (需報到+繳費)", drawStats: "符合資格：{n} 人",
@@ -59,7 +61,9 @@ const translations = {
         statusCheckedIn: "In", statusNotCheckedIn: "Out", statusPaid: "Paid", statusNotPaid: "Unpaid", lane: "Lane", congrats: "Success!", successMsg: "Joined",
         rememberPayment: "Check payment info.", basicInfo: "Info", eventNamePh: "Name", eventRegionPh: "Location", mapLinkPh: "Map Link", bannerUrlPh: "Banner URL",
         descPh: "Description...", eventFormatLabel: "Format", categoriesLabel: "Categories", categoryPh: "Category Name", compSettingsTitle: "Config",
-        laneCountPh: "Lanes", laneCapacityPh: "Max/Lane", paymentSettingsTitle: "Payment", paymentDescPh: "Info...", paymentQrPh: "QR URL", roundConfigTitle: "Rounds",
+        laneCountPh: "Lanes", laneCapacityPh: "Max/Lane", paymentSettingsTitle: "Payment", paymentDescPh: "Info...", paymentQrPh: "QR URL", 
+        paymentLinkPh: "💳 Stripe / Payment Link", payNowBtn: "Pay Now", // 🆕 Added Translation
+        roundConfigTitle: "Rounds",
         publishBtn: "Publish", tabCalling: "Call", tabCheckIn: "CheckIn", tabAssignment: "Draw", currentCall: "On Stage", callStrategy: "Strategy",
         mode: "Mode", modeSingle: "Single", modeAllLanes: "All Lanes", callNext: "Next", randomAssignTitle: "Random Draw",
         drawWarning: "Re-assign numbers?", generateDrawBtn: "Generate (Paid+In)", drawStats: "Eligible: {n}", navHome: "Home", navCreate: "Create", navMy: "My Events",
@@ -100,7 +104,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// --- 子組件 (現在獨立於 App 外部) ---
+// --- 子組件 ---
 
 const AuthScreen = ({ onAuth, isRegistering, setIsRegistering, authEmail, setAuthEmail, authPassword, setAuthPassword, t, systemMessage }) => (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4 text-white">
@@ -220,6 +224,8 @@ const EventDetail = ({ event, user, db, navigate, t, myRegistrations, appId }) =
                     <input className="w-full p-3 bg-gray-900 rounded border border-gray-600" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} required/>
                     <input className="w-full p-3 bg-gray-900 rounded border border-gray-600" type="datetime-local" value={editForm.date} onChange={e => setEditForm({...editForm, date: e.target.value})} required/>
                     <input className="w-full p-3 bg-gray-900 rounded border border-gray-600" value={editForm.bannerUrl} onChange={e => setEditForm({...editForm, bannerUrl: e.target.value})} placeholder="Banner URL"/>
+                    {/* 🆕 編輯模式新增 Payment Link */}
+                    <input className="w-full p-3 bg-gray-900 rounded border border-gray-600" value={editForm.paymentLink} onChange={e => setEditForm({...editForm, paymentLink: e.target.value})} placeholder={t('paymentLinkPh')}/>
                     <input className="w-full p-3 bg-gray-900 rounded border border-gray-600" value={editForm.categoriesStr} onChange={e => setEditForm({...editForm, categoriesStr: e.target.value})} placeholder="Categories"/>
                     <textarea className="w-full p-3 bg-gray-900 rounded border border-gray-600" value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} rows={3}/>
                     <div className="flex gap-2">
@@ -238,6 +244,12 @@ const EventDetail = ({ event, user, db, navigate, t, myRegistrations, appId }) =
                         </div>
                         <div className="flex gap-2 my-2 flex-wrap">{event.categories?.map(c => <span key={c} className="bg-indigo-900 text-indigo-200 px-2 rounded text-xs">{c}</span>)}</div>
                         <p className="text-gray-300 text-sm mt-4 whitespace-pre-wrap">{event.description}</p>
+                        {/* 🆕 顯示付款連結按鈕 */}
+                        {event.paymentLink && (
+                            <a href={event.paymentLink} target="_blank" rel="noopener noreferrer" className="block w-full bg-green-600 hover:bg-green-500 text-white text-center font-bold py-3 rounded-xl mt-4 flex items-center justify-center shadow-lg transform transition hover:scale-[1.02]">
+                                <CreditCard size={20} className="mr-2"/> {t('payNowBtn')}
+                            </a>
+                        )}
                     </div>
                     <div className="fixed bottom-20 left-0 right-0 px-4 z-20">
                         {isCreator ? (
@@ -264,7 +276,7 @@ const EventDetail = ({ event, user, db, navigate, t, myRegistrations, appId }) =
 };
 
 const CreateEventForm = ({ user, db, navigate, t, fetchEvents, appId }) => {
-    const [form, setForm] = useState({ name: '', date: '', region: '', description: '', laneCount: 4, laneCapacity: 50, bannerUrl: '', categoriesStr: 'Standard', paymentInfo: '', paymentQrCodeUrl: '' });
+    const [form, setForm] = useState({ name: '', date: '', region: '', description: '', laneCount: 4, laneCapacity: 50, bannerUrl: '', categoriesStr: 'Standard', paymentInfo: '', paymentQrCodeUrl: '', paymentLink: '' });
     const [isProcessing, setIsProcessing] = useState(false);
     
     const handleSubmit = async (e) => {
@@ -289,6 +301,10 @@ const CreateEventForm = ({ user, db, navigate, t, fetchEvents, appId }) => {
                 <input className="w-full p-3 bg-gray-900 rounded text-white" type="datetime-local" value={form.date} onChange={e => setForm({...form, date: e.target.value})} required/>
                 <input className="w-full p-3 bg-gray-900 rounded text-white" value={form.region} onChange={e => setForm({...form, region: e.target.value})} placeholder={t('eventRegionPh')} required/>
                 <input className="w-full p-3 bg-gray-900 rounded text-white" value={form.bannerUrl} onChange={e => setForm({...form, bannerUrl: e.target.value})} placeholder={t('bannerUrlPh')}/>
+                
+                {/* 🆕 新增 Payment Link 輸入框 */}
+                <input className="w-full p-3 bg-gray-900 rounded text-white" value={form.paymentLink} onChange={e => setForm({...form, paymentLink: e.target.value})} placeholder={t('paymentLinkPh')}/>
+                
                 <input className="w-full p-3 bg-gray-900 rounded text-white" value={form.categoriesStr} onChange={e => setForm({...form, categoriesStr: e.target.value})} placeholder={t('categoriesLabel')}/>
                 <textarea className="w-full p-3 bg-gray-900 rounded text-white" value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder={t('descPh')} rows={3}/>
                 <button disabled={isProcessing} className="w-full bg-red-600 p-4 rounded-xl font-bold shadow-lg">{isProcessing ? <Loader2 className="animate-spin mx-auto"/> : t('publishBtn')}</button>
@@ -321,7 +337,7 @@ const EventManager = ({ event, db, t, navigate, appId }) => {
         shuffled.forEach((r, i) => {
             const lane = getLaneName(i % (event.laneCount || 4));
             const num = Math.floor(i / (event.laneCount || 4)) + 1;
-            batch.update(doc(db, `artifacts/${appId}/public/data/registrations`, r.id), { laneAssignment: lane, queueNumber: num });
+            batch.update(doc(db, `artifacts/${appId}/public/data/registrations`, r.id), { laneAssignment: lane, queueNumber: num, isAssigned: true });
         });
         await batch.commit();
         alert(t('drawSuccess'));
@@ -427,7 +443,7 @@ const App = () => {
         if(!db) return;
         const q = query(collection(db, `artifacts/${appId}/public/data/events`));
         const s = await getDocs(q);
-        setEvents(s.docs.map(d => ({id:d.id, ...d.data(), categories: d.data().categories || ['Standard']})));
+        setEvents(s.docs.map(d => ({id:d.id, ...d.data(), categories: d.data().categories || ['Standard'], paymentLink: d.data().paymentLink || ''})));
     }, []);
 
     useEffect(() => { if(isAuthReady) fetchEvents(); }, [isAuthReady, fetchEvents]);
