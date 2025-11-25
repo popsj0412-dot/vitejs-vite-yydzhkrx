@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+iimport React, { useState, useEffect, useCallback, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction, collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
@@ -22,12 +22,10 @@ const firebaseConfig = {
 // --- 初始化 Firebase ---
 let app, auth, db;
 try {
-  // 檢查 Config 是否有效
   if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("請填入")) {
     app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getFirestore(app);
-    // 設定持久化
     setPersistence(auth, browserLocalPersistence).catch(console.error);
   } else {
     console.warn("Firebase Config 錯誤！");
@@ -35,6 +33,59 @@ try {
 } catch (e) {
   console.error("Firebase Init Failed:", e);
 }
+
+// --- 錯誤攔截器 (Error Boundary) ---
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, errorInfo) { console.error("App Crash:", error, errorInfo); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 bg-red-900 text-white min-h-screen flex flex-col items-center justify-center">
+          <AlertTriangle size={48} className="mb-4" />
+          <h1 className="text-2xl font-bold mb-2">Something went wrong!</h1>
+          <p className="mb-4 text-center">Please reload the app.</p>
+          <div className="bg-black p-4 rounded overflow-auto w-full max-w-md text-xs font-mono border border-red-500">
+            {this.state.error?.toString()}
+          </div>
+          <button onClick={() => window.location.reload()} className="mt-8 px-6 py-3 bg-white text-red-900 rounded-full font-bold">Reload</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// --- 輔助函數 ---
+const formatNumber = (num) => num > 0 ? num.toString().padStart(3, '0') : '--';
+
+const safeDate = (timestamp) => {
+    if (!timestamp) return null;
+    try {
+        if (typeof timestamp.toDate === 'function') return timestamp.toDate();
+        const d = new Date(timestamp);
+        if (isNaN(d.getTime())) return null;
+        return d;
+    } catch (e) { return null; }
+};
+
+const formatDateTime = (timestamp) => {
+    const date = safeDate(timestamp);
+    if (!date) return 'N/A';
+    return date.toLocaleString('zh-TW', { 
+        year: 'numeric', month: 'numeric', day: 'numeric', 
+        hour: '2-digit', minute: '2-digit', hour12: false 
+    });
+};
+
+const formatDateOnly = (timestamp) => {
+    const date = safeDate(timestamp);
+    if (!date) return 'N/A';
+    return date.toLocaleDateString('zh-TW');
+};
+
+const getLaneName = (index) => String.fromCharCode(65 + index);
 
 // --- 翻譯字典 ---
 const translations = {
@@ -207,7 +258,6 @@ const translations = {
         formatStandard: "標準淘汰賽 (Standard)",
         format7toSmoke: "7 to Smoke (車輪戰)",
         formatTournament: "Tournament (1 on 1)",
-        // 🆕 新增錯誤提示
         userNotFound: "此帳號不存在，請先註冊！",
     },
     'en': { 
@@ -896,27 +946,11 @@ const translations = {
     }
 };
 
-const formatNumber = (num) => num > 0 ? num.toString().padStart(3, '0') : '--';
-const formatDateTime = (timestamp) => {
-    if (!timestamp) return 'N/A';
-    if (timestamp.toDate) return new Date(timestamp.toDate()).toLocaleString('zh-TW', { dateStyle: 'medium', timeStyle: 'short' });
-    return new Date(timestamp).toLocaleString('zh-TW', { dateStyle: 'medium', timeStyle: 'short' });
-};
-const formatDateOnly = (timestamp) => {
-    if (!timestamp) return 'N/A';
-    if (timestamp.toDate) return new Date(timestamp.toDate()).toLocaleDateString('zh-TW');
-    return new Date(timestamp).toLocaleDateString('zh-TW');
-};
-const getLaneName = (index) => String.fromCharCode(65 + index);
-
-// --- 主應用程式組件 ---
-
 const App = () => {
     const [user, setUser] = useState(null); 
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [loading, setLoading] = useState(true);
     const [systemMessage, setSystemMessage] = useState('');
-    
     const [lang, setLang] = useState('en');
 
     const [authEmail, setAuthEmail] = useState('');
@@ -929,7 +963,6 @@ const App = () => {
     const [events, setEvents] = useState([]);
     const [myRegistrations, setMyRegistrations] = useState([]);
 
-    // Fallback to 'en' if translation missing
     const t = (key) => translations[lang]?.[key] || translations['en'][key] || key;
 
     // --- Firebase 狀態監聽 ---
@@ -972,13 +1005,15 @@ const App = () => {
             }
         } catch (error) {
             console.error(error);
+            // 🔴 彈跳視窗提示錯誤
             let msg = error.message;
             if(error.code === 'auth/invalid-email') msg = "Invalid Email";
             if(error.code === 'auth/wrong-password') msg = "Wrong Password";
-            // ✅ 新增：針對無此帳號的錯誤提示
             if(error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') msg = t('userNotFound'); 
             if(error.code === 'auth/email-already-in-use') msg = "Email already in use";
+            
             setSystemMessage(msg);
+            alert(msg); // 使用瀏覽器原声彈窗，確保一定看得到
         }
     };
 
@@ -995,7 +1030,7 @@ const App = () => {
         }
     };
 
-    // --- 資料獲取 ---
+    // --- 資料獲取 (含錯誤處理) ---
     const fetchEvents = useCallback(async () => {
         if (!isAuthReady || !db) return;
         try {
@@ -1008,18 +1043,12 @@ const App = () => {
                 categories: doc.data().categories || ['Standard'],
                 laneCount: doc.data().laneCount || 4,
                 laneCapacity: doc.data().laneCapacity || 50, 
-                googleMapLink: doc.data().googleMapLink || '',
+                initialFormat: doc.data().initialFormat || 'standard',
+                callMode: doc.data().callMode || 'single', 
+                roundsConfig: doc.data().roundsConfig || [],
                 bannerUrl: doc.data().bannerUrl || '',
                 paymentInfo: doc.data().paymentInfo || '',
                 paymentQrCodeUrl: doc.data().paymentQrCodeUrl || '',
-                initialFormat: doc.data().initialFormat || 'standard',
-                callMode: doc.data().callMode || 'single', 
-                strictSequence: doc.data().strictSequence ?? false,
-                currentRound: doc.data().currentRound || 1,
-                roundStatus: doc.data().roundStatus || 'active',
-                roundsConfig: doc.data().roundsConfig || [],
-                smokeState: doc.data().smokeState || { king: null, challenger: null, queue: [], wins: {} },
-                tournamentState: doc.data().tournamentState || { matches: [] }
             }));
             setEvents(fetchedEvents);
         } catch (error) {
@@ -1054,54 +1083,8 @@ const App = () => {
         window.scrollTo(0, 0);
     };
 
-    if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white"><Loader2 className="animate-spin mr-2" size={24} /> Loading...</div>;
+    // --- 組件定義 ---
 
-    if (!user) {
-        return (
-            <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
-                <div className="w-full max-w-md bg-gray-900 p-8 rounded-3xl border border-gray-800 shadow-2xl">
-                    <h1 className="text-3xl font-black text-white mb-2 text-center flex items-center justify-center"><span className="text-red-600 mr-2">⚡</span> {t('appTitle')}</h1>
-                    <p className="text-gray-400 text-center mb-8 text-sm">{isRegisteringMode ? t('registerTitle') : t('loginTitle')}</p>
-                    
-                    <form onSubmit={handleAuth} className="space-y-4">
-                        <div className="bg-gray-800 p-2 rounded-xl border border-gray-700 flex items-center">
-                            <Mail className="text-gray-500 ml-2" size={20}/>
-                            <input type="email" placeholder={t('emailPh')} value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="bg-transparent flex-1 p-2 text-white outline-none ml-2" required />
-                        </div>
-                        <div className="bg-gray-800 p-2 rounded-xl border border-gray-700 flex items-center">
-                            <Lock className="text-gray-500 ml-2" size={20}/>
-                            <input type="password" placeholder={t('passwordPh')} value={authPassword} onChange={e => setAuthPassword(e.target.value)} className="bg-transparent flex-1 p-2 text-white outline-none ml-2" required />
-                        </div>
-                        <button type="submit" className="w-full bg-gradient-to-r from-red-600 to-red-800 text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition">
-                            {isRegisteringMode ? t('registerBtn') : t('loginBtn')}
-                        </button>
-                    </form>
-                    
-                    <div className="mt-6 text-center">
-                        <button onClick={() => setIsRegisteringMode(!isRegisteringMode)} className="text-gray-500 hover:text-white text-sm transition">
-                            {isRegisteringMode ? t('switchToLogin') : t('switchToRegister')}
-                        </button>
-                    </div>
-                    
-                    <div className="mt-6 flex justify-center">
-                        <div className="flex items-center gap-2 bg-gray-800 rounded-full px-3 py-1.5 border border-gray-700">
-                            <Globe size={14} className="text-gray-400"/>
-                            <select value={lang} onChange={(e) => setLang(e.target.value)} className="bg-transparent text-xs text-gray-300 focus:outline-none cursor-pointer font-medium">
-                                <option value="en">English</option>
-                                <option value="zh-TW">繁體中文</option>
-                                <option value="zh-CN">简体中文</option>
-                                <option value="ko">한국어</option>
-                                <option value="ja">日本語</option>
-                            </select>
-                        </div>
-                    </div>
-                    {systemMessage && <div className="mt-4 p-3 bg-red-900/30 border border-red-900/50 text-red-400 text-sm rounded-xl text-center">{systemMessage}</div>}
-                </div>
-            </div>
-        );
-    }
-
-    // ... (EventList 保持不變)
     const EventList = () => {
         const [filterRegion, setFilterRegion] = useState('');
         const [filterTime, setFilterTime] = useState('');
@@ -1180,9 +1163,7 @@ const App = () => {
         );
     };
 
-    // 2. 活動詳情與報名 (EventDetail) - 🚨 關鍵修復：Hooks 順序調整
     const EventDetail = ({ event }) => {
-        // 🔥 1. 定義所有 Hooks (不管 event 是否存在)
         const [isRegistering, setIsRegistering] = useState(false);
         const [showCallAlert, setShowCallAlert] = useState(false); 
         const [showQualifyAlert, setShowQualifyAlert] = useState(false);
@@ -1190,7 +1171,6 @@ const App = () => {
         const [wakeLock, setWakeLock] = useState(null);
         
         const [isEditing, setIsEditing] = useState(false);
-        // 使用 Optional Chaining 避免存取 null 屬性
         const [editForm, setEditForm] = useState({ 
             ...event, 
             categoriesStr: event?.categories ? event.categories.join(', ') : 'Standard' 
@@ -1254,8 +1234,6 @@ const App = () => {
             }
         }, [registration?.qualifiedRound]);
 
-        // 🔥 2. 在所有 Hooks 之後，才做條件判斷 (return)
-        // 這樣就能保證每次 Render 的 Hooks 數量一致，不會白畫面
         if (!event) return <div className="p-8 text-center text-white"><Loader2 className="animate-spin mx-auto mb-2"/> Loading event data...</div>;
 
         const getMapLink = () => event.googleMapLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.region)}`;
@@ -1568,7 +1546,7 @@ const App = () => {
                 setSystemMessage(`${t('createFail')}: ${error.message}`); setIsSubmitting(false);
             }
         };
-
+        
         const addCategory = () => {
             if(catInput.trim()) {
                 setCategories([...categories, catInput.trim()]);
@@ -1587,18 +1565,18 @@ const App = () => {
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="bg-gray-800 p-5 rounded-3xl border border-gray-700 shadow-lg space-y-4">
                         <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">{t('basicInfo')}</h3>
-                        <input type="text" name="name" placeholder={t('eventNamePh')} value={formData.name} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
-                        <div><label className="block text-gray-500 text-xs mb-2">{t('eventFormatLabel')}</label><select name="initialFormat" value={formData.initialFormat} onChange={handleChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none appearance-none"><option value="standard">{t('formatStandard')}</option><option value="7tosmoke">{t('format7toSmoke')}</option><option value="tournament">{t('formatTournament')}</option></select></div>
-                        <input type="datetime-local" name="date" value={formData.date} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
-                        <input type="text" name="region" placeholder={t('eventRegionPh')} value={formData.region} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
-                        <input type="text" name="bannerUrl" placeholder={t('bannerUrlPh')} value={formData.bannerUrl} onChange={handleChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
-                        <textarea name="description" placeholder={t('descPh')} value={formData.description} onChange={handleChange} rows="3" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
+                        <input type="text" name="name" placeholder={t('eventNamePh')} value={formData.name} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
+                        <div><label className="block text-gray-500 text-xs mb-2">{t('eventFormatLabel')}</label><select name="initialFormat" value={formData.initialFormat} onChange={handleChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition appearance-none"><option value="standard">{t('formatStandard')}</option><option value="7tosmoke">{t('format7toSmoke')}</option><option value="tournament">{t('formatTournament')}</option></select></div>
+                        <input type="datetime-local" name="date" value={formData.date} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
+                        <input type="text" name="region" placeholder={t('eventRegionPh')} value={formData.region} onChange={handleChange} required className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
+                        <input type="text" name="bannerUrl" placeholder={t('bannerUrlPh')} value={formData.bannerUrl} onChange={handleChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
+                        <textarea name="description" placeholder={t('descPh')} value={formData.description} onChange={handleChange} rows="3" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
                     </div>
                     <div className="bg-gray-800 p-5 rounded-3xl border border-gray-700 shadow-lg space-y-4">
                         <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">{t('compSettingsTitle')}</h3>
                         <div className="grid grid-cols-2 gap-4">
                             <div><label className="block text-gray-500 text-xs mb-2">{t('laneCountPh')}</label><select value={getLaneName(formData.laneCount - 1)} onChange={handleLaneLetterChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition appearance-none">{alphabetOptions.map((letter, idx) => (<option key={letter} value={letter}>{letter} ({idx + 1} Lane{idx > 0 ? 's' : ''})</option>))}</select></div>
-                            <div><label className="block text-gray-500 text-xs mb-2">{t('laneCapacityPh')}</label><input type="number" name="laneCapacity" placeholder="50" value={formData.laneCapacity} onChange={handleChange} min="1" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/></div>
+                            <div><label className="block text-gray-500 text-xs mb-2">{t('laneCapacityPh')}</label><input type="number" name="laneCapacity" placeholder="50" value={formData.laneCapacity} onChange={handleChange} min="1" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/></div>
                         </div>
                         
                         {/* Tag Input System */}
@@ -1619,8 +1597,8 @@ const App = () => {
                     </div>
                     <div className="bg-gray-800 p-5 rounded-3xl border border-gray-700 shadow-lg space-y-4">
                         <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">{t('paymentSettingsTitle')}</h3>
-                        <textarea name="paymentInfo" placeholder={t('paymentDescPh')} value={formData.paymentInfo} onChange={handleChange} rows="3" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
-                        <input type="text" name="paymentQrCodeUrl" placeholder={t('paymentQrPh')} value={formData.paymentQrCodeUrl} onChange={handleChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none"/>
+                        <textarea name="paymentInfo" placeholder={t('paymentDescPh')} value={formData.paymentInfo} onChange={handleChange} rows="3" className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
+                        <input type="text" name="paymentQrCodeUrl" placeholder={t('paymentQrPh')} value={formData.paymentQrCodeUrl} onChange={handleChange} className="w-full p-4 rounded-xl bg-gray-900 text-white border border-gray-700 focus:border-red-500 outline-none transition"/>
                     </div>
                     <button type="submit" disabled={isSubmitting} className="w-full bg-red-600 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition flex items-center justify-center text-lg">{isSubmitting ? <Loader2 className="animate-spin" size={24} /> : t('publishBtn')}</button>
                 </form>
@@ -1665,7 +1643,9 @@ const App = () => {
         );
     };
 
+    // 5. Management List
     const ManagementList = () => {
+        // ✅ 安全檢查：如果 user 不存在，直接回傳 null，防止白畫面
         if (!user) return null;
         const myHostedEvents = events.filter(e => e.creatorId === user.uid);
         return (
@@ -1694,8 +1674,9 @@ const App = () => {
         );
     };
 
-    // 7. Event Manager (後台)
+    // 7. Event Manager (後台) - 新增 Categories 切換與列印
     const EventManager = ({ event }) => {
+        // ✅ 關鍵修復：安全初始化 Hook，防止 event 為 null 時當機
         const [currentCategory, setCurrentCategory] = useState(event?.categories?.[0] || 'Standard');
         
         if (!event) return <div className="p-8 text-center">Loading...</div>;
@@ -1795,7 +1776,7 @@ const App = () => {
         return (
             <div className="p-4 pb-24 space-y-4">
                 <div className="flex justify-between items-center">
-                    <button onClick={() => navigate('detail', event)} className="flex items-center text-gray-400 hover:text-white mb-4"><ChevronLeft size={24}/> {t('backToEvents')}</button>
+                    <button onClick={() => navigate('detail', event)} className="flex items-center text-gray-400 hover:text-white"><ChevronLeft size={24}/> {t('backToEvents')}</button>
                     <div className="flex gap-2">
                          <button onClick={handlePrint} className="bg-gray-700 p-2 rounded hover:bg-gray-600"><Printer size={16}/></button>
                     </div>
@@ -1871,7 +1852,7 @@ const App = () => {
     return (
         <div className="min-h-screen bg-black flex flex-col items-center text-sans">
             <div id="app" className="w-full max-w-md min-h-screen flex flex-col bg-gray-900 text-white shadow-2xl relative">
-                <header className="bg-gray-900/90 backdrop-blur-md text-white p-4 flex justify-between items-center sticky top-0 z-40 border-b border-gray-800"><h1 className="text-xl font-black tracking-tight flex items-center"><span className="text-red-600 mr-1 text-2xl">⚡</span> {t('appTitle')}</h1></header>
+                <header className="bg-gray-900/90 backdrop-blur-md text-white p-4 flex justify-between items-center sticky top-0 z-40 border-b border-gray-800"><h1 className="text-xl font-black tracking-tight flex items-center"><span className="text-red-600 mr-1 text-2xl">⚡</span> {t('appTitle')}</h1><div className="flex items-center gap-2 bg-gray-800 rounded-full px-3 py-1.5 border border-gray-700"><Globe size={14} className="text-gray-400"/><select value={lang} onChange={(e) => setLang(e.target.value)} className="bg-transparent text-xs text-gray-300 focus:outline-none cursor-pointer font-medium"><option value="en">EN</option><option value="zh-TW">繁體</option><option value="zh-CN">简中</option><option value="ko">KR</option><option value="ja">JP</option></select></div></header>
                 <main className="flex-grow overflow-y-auto overflow-x-hidden relative">{renderPage()}</main>
                 <BottomNav />
             </div>
