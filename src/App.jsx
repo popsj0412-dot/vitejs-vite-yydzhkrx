@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction, collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 // ✅ User Icon renamed to UserIcon to avoid conflict
-import { MapPin, Calendar, Users, PlusCircle, LayoutList, CheckCircle, ChevronLeft, Loader2, Megaphone, Settings, ListChecks, Shuffle, TrendingUp, XCircle, DollarSign, ExternalLink, CreditCard, Grid, Play, SkipForward, Hash, Globe, BellRing, Search, Star, Heart, Trophy, AlertCircle, Trash2, Sparkles, Flag, Crown, Swords, Timer, ClipboardList, User as UserIcon, LogOut, Mail, Lock, KeyRound, Copy, Bell, Zap, Dices, Edit, Save, Image as ImageIcon, Printer, FileText, X, Plus, AlertTriangle } from 'lucide-react';
+import { MapPin, Calendar, Users, PlusCircle, LayoutList, CheckCircle, ChevronLeft, Loader2, Megaphone, Settings, ListChecks, Shuffle, TrendingUp, XCircle, DollarSign, ExternalLink, CreditCard, Grid, Play, SkipForward, Hash, Globe, BellRing, Search, Star, Heart, Trophy, AlertCircle, Trash2, Sparkles, Flag, Crown, Swords, Timer, ClipboardList, User as UserIcon, LogOut, Mail, Lock, KeyRound, Copy, Bell, Zap, Dices, Edit, Save, Image as ImageIcon, Printer, FileText, X, Plus, AlertTriangle, Repeat } from 'lucide-react';
 
 // --- App ID ---
 const appId = 'dance-event-demo-01'; 
@@ -128,6 +128,7 @@ const translations = {
         drawSuccess: "Done",
         callSuccess: "Called",
         callNext: "Next",
+        callAgain: "Call Again", // 🆕
         generateDrawBtn: "Generate Draw",
         openMap: "Map",
         category: "Category",
@@ -210,6 +211,7 @@ const translations = {
         drawSuccess: "完成",
         callSuccess: "已叫號",
         callNext: "下一位",
+        callAgain: "再次呼叫", // 🆕
         generateDrawBtn: "生成抽籤 (已付+已到)",
         openMap: "地圖",
         category: "組別",
@@ -234,6 +236,27 @@ const translations = {
         roundLabel: "輪次",
         paymentLinkPh: "支付連結 (Stripe等)",
         payNowBtn: "前往繳費",
+    },
+    'zh-CN': {
+        appTitle: "舞蹈赛事平台",
+        userNotFound: "此账号不存在，请先注册！",
+        payNowBtn: "前往缴费",
+        paymentLinkPh: "💳 Stripe / 支付链接 (可选)",
+        callAgain: "再次呼叫",
+    },
+    'ko': {
+        appTitle: "댄스 플랫폼",
+        userNotFound: "계정이 존재하지 않습니다. 먼저 가입해주세요!",
+        payNowBtn: "결제하기",
+        paymentLinkPh: "💳 Stripe / 결제 링크 (선택)",
+        callAgain: "다시 호출",
+    },
+    'ja': {
+        appTitle: "ダンスプラットフォーム",
+        userNotFound: "アカウントが存在しません。登録してください！",
+        payNowBtn: "支払いへ",
+        paymentLinkPh: "💳 Stripe / 支払いリンク (任意)",
+        callAgain: "再呼び出し",
     }
 };
 
@@ -266,7 +289,7 @@ const EventList = ({ events, navigate, t, handleLogout, lang, setLang }) => {
             <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold">{t('allEvents')}</h2>
                 <div className="flex gap-2 items-center">
-                    <select value={lang} onChange={e => setLang(e.target.value)} className="bg-gray-800 text-xs p-1 rounded"><option value="en">EN</option><option value="zh-TW">繁體</option></select>
+                    <select value={lang} onChange={e => setLang(e.target.value)} className="bg-gray-800 text-xs p-1 rounded"><option value="en">EN</option><option value="zh-TW">繁體</option><option value="zh-CN">简中</option><option value="ko">KR</option><option value="ja">JP</option></select>
                     <button onClick={handleLogout}><LogOut size={16}/></button>
                 </div>
             </div>
@@ -306,12 +329,37 @@ const EventDetail = ({ event, user, db, navigate, t, myRegistrations, appId }) =
     const [stageName, setStageName] = useState('');
     const [category, setCategory] = useState(event.categories?.[0] || 'Standard');
     const [isProcessing, setIsProcessing] = useState(false);
+    
+    // 通知與恆亮防護
+    const [showCallAlert, setShowCallAlert] = useState(false);
+    const audioRef = useRef(null);
 
-    // 通知與恆亮
     useEffect(() => {
         if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(()=>{});
-        if (reg?.called && Notification.permission === 'granted') new Notification(t('itsYourTurn'), { body: t('pleaseGoToStage') });
-    }, [reg?.called]);
+    }, []);
+
+    // 📱 手機崩潰修復核心：改用 lastCalledAt 時間戳記觸發，並加強錯誤處理
+    useEffect(() => {
+        if (reg?.lastCalledAt) {
+            const calledTime = reg.lastCalledAt.toMillis ? reg.lastCalledAt.toMillis() : new Date(reg.lastCalledAt).getTime();
+            const now = Date.now();
+            // 只在最近 10 秒內的呼叫才觸發彈窗，避免無限迴圈
+            if (now - calledTime < 10000) {
+                setShowCallAlert(true);
+                try {
+                   if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 1000]);
+                } catch(e) { console.log("Vibration blocked") }
+
+                if (audioRef.current) {
+                    audioRef.current.play().catch(e => console.log("Audio blocked"));
+                }
+                
+                if (Notification.permission === 'granted') {
+                    try { new Notification(t('itsYourTurn'), { body: t('pleaseGoToStage') }); } catch(e){}
+                }
+            }
+        }
+    }, [reg?.lastCalledAt]); // 監聽最後呼叫時間
 
     const handleRegister = async () => {
         if (!stageName.trim()) return alert("Please enter Stage Name");
@@ -322,7 +370,7 @@ const EventDetail = ({ event, user, db, navigate, t, myRegistrations, appId }) =
             if (!snap.empty) throw new Error("Already registered");
             await addDoc(collection(db, `artifacts/${appId}/public/data/registrations`), {
                 eventId: event.id, userId: user.uid, stageName, category,
-                registrationTime: serverTimestamp(), checkedIn: false, paid: false, isAssigned: false, called: false
+                registrationTime: serverTimestamp(), checkedIn: false, paid: false, isAssigned: false, called: false, lastCalledAt: null
             });
             Notification.requestPermission();
             navigate('registerSuccess', { ...event, temp: true });
@@ -350,6 +398,20 @@ const EventDetail = ({ event, user, db, navigate, t, myRegistrations, appId }) =
 
     return (
         <div className="p-4 pb-24 space-y-4 text-white">
+            {/* 音效檔案 */}
+            <audio ref={audioRef} src="data:audio/mp3;base64,SUQzBAAAAAABAFRYWFgAAAASAAADbWFqb3JfYnJhbmQAbXA0MgBUWFhYAAAAEQAAA21pbm9yX3ZlcnNpb24AMABUWFhYAAAAHAAAA2NvbXBhdGlibGVfYnJhbmRzAGlzb21tcDQyAFRTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAABH//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB///tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB" /> 
+            
+            {showCallAlert && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 animate-in fade-in">
+                    <div className="bg-red-600 p-8 rounded-3xl text-center border-4 border-white animate-bounce">
+                        <BellRing size={64} className="text-white mx-auto mb-4 animate-pulse" />
+                        <h2 className="text-3xl font-black text-white mb-2">{t('itsYourTurn')}</h2>
+                        <p className="text-lg text-white font-bold">{t('pleaseGoToStage')}</p>
+                        <button onClick={() => setShowCallAlert(false)} className="mt-6 bg-white text-red-600 px-8 py-3 rounded-full font-bold text-lg w-full">OK</button>
+                    </div>
+                </div>
+            )}
+
             <button onClick={() => navigate('browse')} className="flex items-center text-gray-400"><ChevronLeft size={20}/> {t('backToEvents')}</button>
             {isEditing ? (
                 <form onSubmit={handleUpdate} className="bg-gray-800 p-4 rounded-xl space-y-3 border border-gray-700">
@@ -432,10 +494,7 @@ const CreateEventForm = ({ user, db, navigate, t, fetchEvents, appId }) => {
                 <input className="w-full p-3 bg-gray-900 rounded text-white" type="datetime-local" value={form.date} onChange={e => setForm({...form, date: e.target.value})} required/>
                 <input className="w-full p-3 bg-gray-900 rounded text-white" value={form.region} onChange={e => setForm({...form, region: e.target.value})} placeholder={t('eventRegionPh')} required/>
                 <input className="w-full p-3 bg-gray-900 rounded text-white" value={form.bannerUrl} onChange={e => setForm({...form, bannerUrl: e.target.value})} placeholder={t('bannerUrlPh')}/>
-                
-                {/* 🆕 Payment Link */}
                 <input className="w-full p-3 bg-gray-900 rounded text-white" value={form.paymentLink} onChange={e => setForm({...form, paymentLink: e.target.value})} placeholder={t('paymentLinkPh')}/>
-                
                 <input className="w-full p-3 bg-gray-900 rounded text-white" value={form.categoriesStr} onChange={e => setForm({...form, categoriesStr: e.target.value})} placeholder={t('categoriesLabel')}/>
                 <textarea className="w-full p-3 bg-gray-900 rounded text-white" value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder={t('descPh')} rows={3}/>
                 <button disabled={isProcessing} className="w-full bg-red-600 p-4 rounded-xl font-bold shadow-lg">{isProcessing ? <Loader2 className="animate-spin mx-auto"/> : t('publishBtn')}</button>
@@ -476,12 +535,26 @@ const EventManager = ({ event, db, t, navigate, appId }) => {
 
     const toggle = (id, field, val) => updateDoc(doc(db, `artifacts/${appId}/public/data/registrations`, id), { [field]: val });
     
+    // 🆕 修改叫號邏輯：新增 "再次呼叫" 與 "呼叫下一位"
     const callNext = async () => {
+        // 找出下一個還沒被叫過的人
         const next = catRegs.filter(r => r.laneAssignment && !r.called).sort((a,b) => a.queueNumber - b.queueNumber)[0];
         if (!next) return alert(t('noMorePlayers'));
+        
         await setDoc(doc(db, `artifacts/${appId}/public/data/call_status/${event.id}`), { displayNumbers: [next.queueNumber], updatedAt: serverTimestamp() }, { merge: true });
-        await updateDoc(doc(db, `artifacts/${appId}/public/data/registrations`, next.id), { called: true });
+        // 更新 lastCalledAt 時間戳記，這會觸發手機彈窗
+        await updateDoc(doc(db, `artifacts/${appId}/public/data/registrations`, next.id), { called: true, lastCalledAt: serverTimestamp() });
     };
+    
+    // 🆕 重新呼叫當前這一位
+    const callAgain = async () => {
+        const currentNum = callStatus.displayNumbers?.[0];
+        if (!currentNum) return;
+        const currentReg = catRegs.find(r => r.queueNumber === currentNum);
+        if (currentReg) {
+             await updateDoc(doc(db, `artifacts/${appId}/public/data/registrations`, currentReg.id), { lastCalledAt: serverTimestamp() });
+        }
+    }
     
     const printList = () => {
         const win = window.open('','','width=600,height=600');
@@ -504,7 +577,14 @@ const EventManager = ({ event, db, t, navigate, appId }) => {
                     </div>
                 ))}
                 {activeTab === 'draw' && <div className="text-center p-8"><Dices size={48} className="mx-auto mb-4 text-indigo-400"/><p className="mb-4 text-gray-400">{t('drawStats').replace('{n}', eligible.length)}</p><button onClick={draw} className="w-full bg-indigo-600 p-4 rounded-xl font-bold shadow-lg">{t('generateDrawBtn')}</button></div>}
-                {activeTab === 'call' && <div className="text-center p-8"><div className="text-6xl font-black mb-6">{callStatus.displayNumbers?.[0] || '--'}</div><button onClick={callNext} className="w-full bg-green-600 p-4 rounded-xl font-bold shadow-lg">{t('callNext')}</button></div>}
+                {activeTab === 'call' && <div className="text-center p-8">
+                    <div className="text-6xl font-black mb-6">{callStatus.displayNumbers?.[0] || '--'}</div>
+                    <div className="flex gap-2">
+                        {/* 🆕 兩個按鈕：再次呼叫 / 呼叫下一位 */}
+                        <button onClick={callAgain} className="flex-1 bg-yellow-600 p-4 rounded-xl font-bold shadow-lg flex items-center justify-center"><Repeat size={20} className="mr-2"/> {t('callAgain')}</button>
+                        <button onClick={callNext} className="flex-1 bg-green-600 p-4 rounded-xl font-bold shadow-lg flex items-center justify-center">{t('callNext')} <ChevronLeft className="ml-2 rotate-180" size={20}/></button>
+                    </div>
+                </div>}
             </div>
         </div>
     );
