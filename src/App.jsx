@@ -2,12 +2,13 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, onSnapshot, runTransaction, collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+// ✅ User 圖示改名為 UserIcon，避免衝突
 import { MapPin, Calendar, Users, PlusCircle, LayoutList, CheckCircle, ChevronLeft, Loader2, Megaphone, Settings, ListChecks, Shuffle, TrendingUp, XCircle, DollarSign, ExternalLink, CreditCard, Grid, Play, SkipForward, Hash, Globe, BellRing, Search, Star, Heart, Trophy, AlertCircle, Trash2, Sparkles, Flag, Crown, Swords, Timer, ClipboardList, User as UserIcon, LogOut, Mail, Lock, KeyRound, Copy, Bell, Zap, Dices, Edit, Save, Image as ImageIcon, Printer, FileText, X, Plus, AlertTriangle, Repeat } from 'lucide-react';
 
 // --- App ID ---
 const appId = 'dance-event-demo-01'; 
 
-// --- Firebase Config ---
+// --- Firebase 設定 ---
 const firebaseConfig = {
   apiKey: "AIzaSyC7sx5yZtUHYXbVtVTokmJbz5GS9U8aVtg",
   authDomain: "number-calling.firebaseapp.com",
@@ -18,7 +19,7 @@ const firebaseConfig = {
   measurementId: "G-WSX5WGW02B"
 };
 
-// --- Initialize Firebase ---
+// --- 初始化 Firebase ---
 let app, auth, db;
 try {
   if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("請填入")) {
@@ -31,7 +32,7 @@ try {
   console.error("Firebase Init Failed:", e);
 }
 
-// --- Error Boundary ---
+// --- 錯誤攔截器 ---
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null }; }
   static getDerivedStateFromError(error) { return { hasError: true, error }; }
@@ -50,7 +51,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// --- Helper Functions ---
+// --- 輔助函數 ---
 const formatNumber = (num) => num > 0 ? num.toString().padStart(3, '0') : '--';
 const safeDate = (timestamp) => {
     if (!timestamp) return null;
@@ -64,166 +65,63 @@ const safeDate = (timestamp) => {
 const formatDateOnly = (ts) => safeDate(ts)?.toLocaleDateString('zh-TW') || 'N/A';
 const getLaneName = (index) => String.fromCharCode(65 + index);
 
+// --- 翻譯字典 ---
 const translations = {
+    'en': { 
+        appTitle: "Dance Platform", 
+        loginTitle: "Login", registerTitle: "Register", emailPh: "Email", passwordPh: "Password (min 6 chars)",
+        loginBtn: "Login", registerBtn: "Register", switchToRegister: "No account? Register", switchToLogin: "Have account? Login",
+        logout: "Logout", allEvents: "All Events", noEvents: "No events found.", backToEvents: "Back",
+        createEventTitle: "Create Event", eventNamePh: "Event Name", eventRegionPh: "Location", bannerUrlPh: "Banner URL",
+        descPh: "Description...", manageEventBtn: "Dashboard", randomRegisterBtn: "Register", registered: "Registered",
+        waitingForDraw: "Waiting for Draw", statusCheckedIn: "In", statusNotCheckedIn: "Out", statusPaid: "Paid",
+        statusNotPaid: "Unpaid", yourNumber: "Your #", manageListTitle: "Hosted Events", myEventsTitle: "My Events",
+        noHostedEvents: "No hosted events", noJoinedEvents: "No joined events", enterManage: "Manage",
+        compSettingsTitle: "Settings", laneCountPh: "Lanes", laneCapacityPh: "Max/Lane", categoriesLabel: "Categories",
+        categoryPh: "Category Name", paymentSettingsTitle: "Payment", paymentDescPh: "Info...", paymentQrPh: "QR URL",
+        publishBtn: "Publish", editEvent: "Edit", deleteEvent: "Delete", saveChanges: "Save", cancelEdit: "Cancel",
+        deleteConfirm: "Delete?", endEventConfirm: "End?", eventEnded: "Ended", tabCheckIn: "CheckIn", tabAssignment: "Draw",
+        tabCalling: "Call", userNotFound: "Account not found! Please register first.", drawWarning: "Re-draw?",
+        drawSuccess: "Done", callSuccess: "Called", callNext: "Next", callAgain: "Call Again", generateDrawBtn: "Generate Draw",
+        openMap: "Map", category: "Category", printList: "Print", printTitle: "List", stageNamePh: "Stage Name",
+        selectCategory: "Select Category", notifyHint: "Enable Notify", itsYourTurn: "Your Turn!", pleaseGoToStage: "Go to stage!",
+        closeNotification: "OK", qualifyAlertTitle: "Qualified!", qualifyAlertMsg: "Next round!", congrats: "Success",
+        successMsg: "Joined", rememberPayment: "Check payment info", backToHome: "Home", addCategoryBtn: "Add",
+        eventFormatLabel: "Main Format", roundConfigTitle: "Rounds", roundConfigDesc: "Qualifiers", roundLabel: "Round",
+        paymentLinkPh: "Payment Link", payNowBtn: "Pay Now",
+        callModeSingle: "Single Mode", callModeAllLanes: "All Lanes",
+    },
     'zh-TW': {
         appTitle: "舞蹈賽事平台",
-        loginTitle: "登入", registerTitle: "註冊", emailPh: "電子郵件", passwordPh: "密碼", loginBtn: "登入", registerBtn: "註冊", switchToRegister: "沒帳號？註冊", switchToLogin: "有帳號？登入", logout: "登出", allEvents: "所有賽事", noEvents: "目前無賽事", backToEvents: "返回列表", createEventTitle: "發佈賽事", eventNamePh: "活動名稱", eventRegionPh: "地點", bannerUrlPh: "封面圖片網址", descPh: "描述...", manageEventBtn: "管理後台", randomRegisterBtn: "報名參賽", registered: "已報名", waitingForDraw: "待抽籤", statusCheckedIn: "已到", statusNotCheckedIn: "未到", statusPaid: "已付", statusNotPaid: "未付", yourNumber: "編號", manageListTitle: "我主辦的", myEventsTitle: "我參加的", noHostedEvents: "無主辦賽事", noJoinedEvents: "無參賽紀錄", enterManage: "管理", compSettingsTitle: "賽制設定", laneCountPh: "賽道數", laneCapacityPh: "人數上限", categoriesLabel: "組別", categoryPh: "組別名稱", paymentSettingsTitle: "繳費設定", paymentDescPh: "繳費說明", paymentQrPh: "QR 連結", publishBtn: "發佈", editEvent: "編輯", deleteEvent: "刪除", saveChanges: "儲存", cancelEdit: "取消", deleteConfirm: "確定刪除？", endEventConfirm: "確定結束？", eventEnded: "已結束", tabCheckIn: "報到", tabAssignment: "抽籤", tabCalling: "叫號", userNotFound: "查無此帳號，請先註冊！", drawWarning: "確定重新抽籤？", drawSuccess: "完成", callSuccess: "已叫號", callNext: "下一位", callAgain: "再次呼叫", generateDrawBtn: "生成抽籤 (已付+已到)", openMap: "地圖", category: "組別", printList: "列印名單", printTitle: "參賽名單", stageNamePh: "舞台名稱", selectCategory: "選擇組別", notifyHint: "開啟通知", itsYourTurn: "輪到你了！", pleaseGoToStage: "請上台！", closeNotification: "收到", qualifyAlertTitle: "恭喜晉級！", qualifyAlertMsg: "進入下一輪", congrats: "報名成功", successMsg: "已登記", rememberPayment: "請記得繳費報到", backToHome: "回首頁", addCategoryBtn: "加入", eventFormatLabel: "賽制", roundConfigTitle: "輪次設定", roundConfigDesc: "晉級人數", roundLabel: "輪次", paymentLinkPh: "支付連結 (Stripe等)", payNowBtn: "前往繳費",
-        callModeSingle: "單人叫號", callModeAllLanes: "賽道齊發 (多道)", callTop8: "呼叫 8 強選手", callBattle: "呼叫對戰 (1 on 1)", start7toSmoke: "啟動 7 to Smoke", startTournament: "啟動 Tournament", battle: "對戰", winner: "獲勝",
+        loginTitle: "登入", registerTitle: "註冊", emailPh: "電子郵件", passwordPh: "密碼",
+        loginBtn: "登入", registerBtn: "註冊", switchToRegister: "沒帳號？註冊", switchToLogin: "有帳號？登入",
+        logout: "登出", allEvents: "所有賽事", noEvents: "目前無賽事", backToEvents: "返回列表",
+        createEventTitle: "發佈賽事", eventNamePh: "活動名稱", eventRegionPh: "地點", bannerUrlPh: "封面圖片網址",
+        descPh: "描述...", manageEventBtn: "管理後台", randomRegisterBtn: "報名參賽", registered: "已報名",
+        waitingForDraw: "待抽籤", statusCheckedIn: "已到", statusNotCheckedIn: "未到", statusPaid: "已付",
+        statusNotPaid: "未付", yourNumber: "編號", manageListTitle: "我主辦的", myEventsTitle: "我參加的",
+        noHostedEvents: "無主辦賽事", noJoinedEvents: "無參賽紀錄", enterManage: "管理",
+        compSettingsTitle: "賽制設定", laneCountPh: "賽道數", laneCapacityPh: "人數上限", categoriesLabel: "組別",
+        categoryPh: "組別名稱", paymentSettingsTitle: "繳費設定", paymentDescPh: "繳費說明", paymentQrPh: "QR 連結",
+        publishBtn: "發佈", editEvent: "編輯", deleteEvent: "刪除", saveChanges: "儲存", cancelEdit: "取消",
+        deleteConfirm: "確定刪除？", endEventConfirm: "確定結束？", eventEnded: "已結束", tabCheckIn: "報到",
+        tabAssignment: "抽籤", tabCalling: "叫號", userNotFound: "查無此帳號，請先註冊！", drawWarning: "確定重新抽籤？",
+        drawSuccess: "完成", callSuccess: "已叫號", callNext: "下一位", callAgain: "再次呼叫", generateDrawBtn: "生成抽籤 (已付+已到)",
+        openMap: "地圖", category: "組別", printList: "列印名單", printTitle: "參賽名單", stageNamePh: "舞台名稱",
+        selectCategory: "選擇組別", notifyHint: "開啟通知", itsYourTurn: "輪到你了！", pleaseGoToStage: "請上台！",
+        closeNotification: "收到", qualifyAlertTitle: "恭喜晉級！", qualifyAlertMsg: "進入下一輪", congrats: "報名成功",
+        successMsg: "已登記", rememberPayment: "請記得繳費報到", backToHome: "回首頁", addCategoryBtn: "加入",
+        eventFormatLabel: "賽制", roundConfigTitle: "輪次設定", roundConfigDesc: "晉級人數", roundLabel: "輪次",
+        paymentLinkPh: "支付連結 (Stripe等)", payNowBtn: "前往繳費",
+        callModeSingle: "單人叫號", callModeAllLanes: "賽道齊發",
     },
-    'en': { appTitle: "Dance Platform" } 
+    'zh-CN': { appTitle: "舞蹈赛事平台", userNotFound: "此账号不存在，请先注册！", payNowBtn: "前往缴费", paymentLinkPh: "💳 Stripe / 支付链接 (可选)", callAgain: "再次呼叫" },
+    'ko': { appTitle: "댄스 플랫폼", userNotFound: "계정이 존재하지 않습니다. 먼저 가입해주세요!", payNowBtn: "결제하기", paymentLinkPh: "💳 Stripe / 결제 링크 (선택)", callAgain: "다시 호출" },
+    'ja': { appTitle: "ダンスプラットフォーム", userNotFound: "アカウントが存在しません。登録してください！", payNowBtn: "支払いへ", paymentLinkPh: "💳 Stripe / 支払いリンク (任意)", callAgain: "再呼び出し" }
 };
 
-// --- Main App Component ---
-const App = () => {
-    const [user, setUser] = useState(null);
-    const [isAuthReady, setIsAuthReady] = useState(false);
-    const [lang, setLang] = useState('zh-TW');
-    const [currentPage, setCurrentPage] = useState('browse');
-    const [selectedEvent, setSelectedEvent] = useState(null);
-    const [events, setEvents] = useState([]);
-    const [myRegistrations, setMyRegistrations] = useState([]);
-    
-    const [authEmail, setAuthEmail] = useState('');
-    const [authPassword, setAuthPassword] = useState('');
-    const [isRegisteringMode, setIsRegisteringMode] = useState(false);
-    const [systemMessage, setSystemMessage] = useState('');
+// --- 子組件 (移至 App 上方以避免 ReferenceError) ---
 
-    // 🔔 全域通知狀態
-    const [globalAlert, setGlobalAlert] = useState(null); // { title, body, eventName }
-    const audioRef = useRef(null);
-
-    const t = (key) => translations[lang]?.[key] || translations['en'][key] || key;
-
-    // Auth
-    useEffect(() => {
-        if(!auth) return;
-        return onAuthStateChanged(auth, (u) => {
-            setUser(u);
-            setIsAuthReady(true);
-        });
-    }, []);
-
-    // 🟢 全域監聽：只要有任何一個報名的活動叫號，就觸發通知
-    useEffect(() => {
-        if (!myRegistrations.length || !events.length) return;
-
-        // 檢查是否有任何註冊剛被呼叫 (10秒內)
-        const now = Date.now();
-        const activeCalls = myRegistrations.filter(reg => {
-            if (!reg.lastCalledAt || !reg.called) return false;
-            const time = reg.lastCalledAt.toMillis ? reg.lastCalledAt.toMillis() : new Date(reg.lastCalledAt).getTime();
-            return (now - time) < 10000; // 10秒內的呼叫
-        });
-
-        if (activeCalls.length > 0) {
-            const lastCall = activeCalls[0]; // 取最新的一個
-            const eventName = events.find(e => e.id === lastCall.eventId)?.name || "Unknown Event";
-            
-            // 設定全域彈窗內容
-            setGlobalAlert({
-                title: t('itsYourTurn'),
-                body: `${t('pleaseGoToStage')}`,
-                eventName: eventName
-            });
-
-            // 嘗試觸發手機功能 (包在 try-catch 避免崩潰)
-            try { if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 1000]); } catch(e){}
-            
-            if (audioRef.current) {
-                audioRef.current.play().catch(e => console.log("Auto-play prevented by browser"));
-            }
-
-            if (Notification.permission === 'granted') {
-                try { new Notification(`${t('itsYourTurn')} - ${eventName}`, { body: t('pleaseGoToStage') }); } catch(e){}
-            }
-        }
-    }, [myRegistrations, events]); // 當註冊資料更新時觸發 (包含被叫號)
-
-    const handleAuth = async (e) => {
-        e.preventDefault();
-        // 登入時順便解鎖音效
-        if (audioRef.current) { audioRef.current.play().then(()=>audioRef.current.pause()).catch(()=>{}); }
-        try {
-            if(isRegisteringMode) await createUserWithEmailAndPassword(auth, authEmail, authPassword);
-            else await signInWithEmailAndPassword(auth, authEmail, authPassword);
-        } catch(err) { alert(err.message); }
-    };
-
-    const fetchEvents = useCallback(async () => {
-        if(!db) return;
-        const q = query(collection(db, `artifacts/${appId}/public/data/events`));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            setEvents(snapshot.docs.map(d => ({id:d.id, ...d.data(), categories: d.data().categories || ['Standard'], paymentLink: d.data().paymentLink || ''})));
-        });
-        return () => unsubscribe();
-    }, []);
-
-    useEffect(() => { if(isAuthReady) fetchEvents(); }, [isAuthReady, fetchEvents]);
-    
-    useEffect(() => {
-        if(!db || !user) return;
-        const q = query(collection(db, `artifacts/${appId}/public/data/registrations`), where("userId", "==", user.uid));
-        // 實時監聽我的所有報名
-        return onSnapshot(q, s => setMyRegistrations(s.docs.map(d => ({id:d.id, ...d.data()}))));
-    }, [user]);
-
-    const navigate = (page, event = null) => { setSelectedEvent(event); setCurrentPage(page); window.scrollTo(0,0); };
-
-    if (!isAuthReady) return <div className="min-h-screen bg-black flex items-center justify-center text-white"><Loader2 className="animate-spin"/></div>;
-
-    if (!user) return <AuthScreen onAuth={handleAuth} isRegistering={isRegisteringMode} setIsRegistering={setIsRegisteringMode} authEmail={authEmail} setAuthEmail={setAuthEmail} authPassword={authPassword} setAuthPassword={setAuthPassword} t={t} systemMessage={systemMessage}/>;
-
-    return (
-        <ErrorBoundary>
-            <div className="min-h-screen bg-black text-sans flex flex-col items-center">
-                {/* 隱藏音效檔 */}
-                <audio ref={audioRef} src="data:audio/mp3;base64,SUQzBAAAAAABAFRYWFgAAAASAAADbWFqb3JfYnJhbmQAbXA0MgBUWFhYAAAAEQAAA21pbm9yX3ZlcnNpb24AMABUWFhYAAAAHAAAA2NvbXBhdGlibGVfYnJhbmRzAGlzb21tcDQyAFRTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAABH//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB///tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB" /> 
-
-                {/* 🔴 全域通知彈窗 (Global Alert) */}
-                {globalAlert && (
-                    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 animate-in fade-in zoom-in duration-300">
-                        <div className="bg-red-600 p-8 rounded-3xl text-center border-4 border-white shadow-2xl w-4/5 max-w-sm animate-bounce">
-                            <BellRing size={64} className="text-white mx-auto mb-4 animate-pulse" />
-                            <h2 className="text-2xl font-black text-white mb-1">{globalAlert.eventName}</h2>
-                            <h3 className="text-3xl font-black text-yellow-300 mb-4">{globalAlert.title}</h3>
-                            <p className="text-lg text-white font-bold">{globalAlert.body}</p>
-                            <button 
-                                onClick={() => { setGlobalAlert(null); if(audioRef.current) audioRef.current.pause(); }} 
-                                className="mt-8 bg-white text-red-600 px-8 py-4 rounded-full font-bold text-xl w-full shadow-lg active:scale-95"
-                            >
-                                {t('closeNotification')}
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                <div id="app" className="w-full max-w-md min-h-screen flex flex-col bg-gray-900 shadow-xl relative">
-                    <header className="p-4 bg-gray-900 border-b border-gray-800 flex justify-between items-center sticky top-0 z-50">
-                        <h1 className="text-xl font-black text-white flex items-center"><span className="text-red-600 mr-2">⚡</span> {t('appTitle')}</h1>
-                    </header>
-                    
-                    <main className="flex-grow overflow-y-auto">
-                        {currentPage === 'browse' && <EventList events={events} navigate={navigate} t={t} handleLogout={()=>signOut(auth)} lang={lang} setLang={setLang}/>}
-                        {currentPage === 'detail' && <EventDetail event={selectedEvent} user={user} db={db} navigate={navigate} t={t} myRegistrations={myRegistrations} appId={appId} requestNotificationPermission={() => Notification.requestPermission()}/>}
-                        {currentPage === 'create' && <CreateEventForm user={user} db={db} navigate={navigate} t={t} fetchEvents={fetchEvents} appId={appId}/>}
-                        {currentPage === 'manage' && <EventManager event={selectedEvent} db={db} t={t} navigate={navigate} appId={appId}/>}
-                        {currentPage === 'my_events' && <MyEvents events={events} myRegistrations={myRegistrations} navigate={navigate} t={t}/>}
-                        {currentPage === 'manage_list' && <ManagementList events={events} user={user} navigate={navigate} t={t}/>}
-                        {currentPage === 'registerSuccess' && <RegistrationSuccess event={selectedEvent} navigate={navigate} t={t}/>}
-                    </main>
-
-                    <div className="fixed bottom-0 w-full max-w-md bg-gray-900 border-t border-gray-800 flex justify-around p-2 z-50">
-                        {[{p:'browse',i:Grid},{p:'create',i:PlusCircle},{p:'my_events',i:UserIcon},{p:'manage_list',i:ClipboardList}].map(b=>(
-                            <button key={b.p} onClick={()=>navigate(b.p)} className={`p-2 ${currentPage===b.p?'text-red-500':'text-gray-500'}`}><b.i/></button>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        </ErrorBoundary>
-    );
-};
-
-// --- 子組件 (保持原樣，直接引用前面的定義) ---
 const AuthScreen = ({ onAuth, isRegistering, setIsRegistering, authEmail, setAuthEmail, authPassword, setAuthPassword, t, systemMessage }) => (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4 text-white">
         <div className="w-full max-w-md bg-gray-900 p-8 rounded-3xl border border-gray-800 shadow-2xl">
@@ -246,12 +144,12 @@ const EventList = ({ events, navigate, t, handleLogout, lang, setLang }) => {
         <div className="p-4 pb-24 space-y-4 text-white">
             <div className="flex justify-between items-center"><h2 className="text-xl font-bold">{t('allEvents')}</h2><div className="flex gap-2 items-center"><select value={lang} onChange={e => setLang(e.target.value)} className="bg-gray-800 text-xs p-1 rounded"><option value="zh-TW">繁體</option><option value="en">EN</option></select><button onClick={handleLogout}><LogOut size={16}/></button></div></div>
             {featured && <div onClick={() => navigate('detail', featured)} className="relative w-full h-48 bg-gray-800 rounded-3xl overflow-hidden border border-gray-700 group cursor-pointer">{featured.bannerUrl ? <img src={featured.bannerUrl} className="absolute inset-0 w-full h-full object-cover opacity-60" /> : <div className="absolute inset-0 bg-gradient-to-br from-purple-900 to-black opacity-90"/>}<div className="absolute inset-0 flex flex-col justify-end p-4 bg-gradient-to-t from-black/90 via-transparent"><span className="bg-red-600 text-[10px] font-black px-2 py-1 rounded w-fit mb-1">HOT</span><h3 className="text-2xl font-black shadow-black drop-shadow-md">{featured.name}</h3><p className="text-xs text-gray-300 flex items-center"><MapPin size={12} className="mr-1"/>{featured.region}</p></div></div>}
-            <div className="space-y-3">{sorted.map(e => <div key={e.id} onClick={() => navigate('detail', e)} className="bg-gray-800 p-4 rounded-2xl border border-gray-700 flex gap-3 cursor-pointer overflow-hidden relative">{e.bannerUrl && <div className="absolute inset-0 opacity-20"><img src={e.bannerUrl} className="w-full h-full object-cover"/></div>}<div className="relative z-10"><h3 className="font-bold text-lg">{e.name}</h3><div className="flex gap-1 flex-wrap mt-1">{e.categories.map(c => <span key={c} className="text-[10px] bg-indigo-900 text-indigo-200 px-1 rounded border border-indigo-700">{c}</span>)}</div><div className="text-sm text-gray-400 mt-2 flex items-center"><Calendar size={14} className="mr-1"/>{formatDateOnly(e.date)}</div></div></div>)}</div>
+            <div className="space-y-3">{sorted.map(e => <div key={e.id} onClick={() => navigate('detail', e)} className="bg-gray-800 p-4 rounded-2xl border border-gray-700 flex gap-3 cursor-pointer overflow-hidden relative">{e.bannerUrl && <div className="absolute inset-0 opacity-20"><img src={e.bannerUrl} className="w-full h-full object-cover"/></div>}<div className="relative z-10"><h3 className="font-bold text-lg">{e.name}</h3><div className="flex gap-1 flex-wrap mt-1">{e.categories?.map(c => <span key={c} className="text-[10px] bg-indigo-900 text-indigo-200 px-1 rounded border border-indigo-700">{c}</span>)}</div><div className="text-sm text-gray-400 mt-2 flex items-center"><Calendar size={14} className="mr-1"/>{formatDateOnly(e.date)}</div></div></div>)}</div>
         </div>
     );
 };
 
-const EventDetail = ({ event, user, db, navigate, t, myRegistrations, appId, requestNotificationPermission }) => {
+const EventDetail = ({ event, user, db, navigate, t, myRegistrations, appId }) => {
     if (!event) return <div className="p-8 text-center text-white"><Loader2 className="animate-spin mx-auto"/></div>;
     const reg = myRegistrations.find(r => r.eventId === event.id);
     const isCreator = user?.uid === event.creatorId;
@@ -260,6 +158,25 @@ const EventDetail = ({ event, user, db, navigate, t, myRegistrations, appId, req
     const [stageName, setStageName] = useState('');
     const [category, setCategory] = useState(event.categories?.[0] || 'Standard');
     
+    // 手機通知防護機制
+    const [showCallAlert, setShowCallAlert] = useState(false);
+    const audioRef = useRef(null);
+
+    useEffect(() => { if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(()=>{}); }, []);
+    
+    useEffect(() => {
+        if (reg?.called) {
+            const calledTime = reg.lastCalledAt?.toMillis ? reg.lastCalledAt.toMillis() : new Date(reg.lastCalledAt).getTime();
+            // 10秒內的呼叫才觸發通知
+            if (Date.now() - calledTime < 10000) {
+                setShowCallAlert(true);
+                try { if (navigator.vibrate) navigator.vibrate([500, 200, 500]); } catch(e){}
+                if (audioRef.current) audioRef.current.play().catch(e => console.log("Audio blocked"));
+                if (Notification.permission === 'granted') try { new Notification(t('itsYourTurn'), { body: t('pleaseGoToStage') }); } catch(e){}
+            }
+        }
+    }, [reg?.lastCalledAt]);
+
     const handleRegister = async () => {
         if (!stageName.trim()) return alert("Please enter Stage Name");
         try {
@@ -267,7 +184,7 @@ const EventDetail = ({ event, user, db, navigate, t, myRegistrations, appId, req
             const snap = await getDocs(q);
             if (!snap.empty) throw new Error("Already registered");
             await addDoc(collection(db, `artifacts/${appId}/public/data/registrations`), { eventId: event.id, userId: user.uid, stageName, category, registrationTime: serverTimestamp(), checkedIn: false, paid: false, isAssigned: false, called: false, lastCalledAt: null });
-            requestNotificationPermission();
+            Notification.requestPermission();
             navigate('registerSuccess', { ...event, temp: true });
         } catch (e) { alert(e.message); }
     };
@@ -288,6 +205,8 @@ const EventDetail = ({ event, user, db, navigate, t, myRegistrations, appId, req
 
     return (
         <div className="p-4 pb-24 space-y-4 text-white">
+            <audio ref={audioRef} src="data:audio/mp3;base64,SUQzBAAAAAABAFRYWFgAAAASAAADbWFqb3JfYnJhbmQAbXA0MgBUWFhYAAAAEQAAA21pbm9yX3ZlcnNpb24AMABUWFhYAAAAHAAAA2NvbXBhdGlibGVfYnJhbmRzAGlzb21tcDQyAFRTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAABH//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB///tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB" /> 
+            {showCallAlert && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 animate-in fade-in"><div className="bg-red-600 p-8 rounded-3xl text-center border-4 border-white animate-bounce"><BellRing size={64} className="text-white mx-auto mb-4 animate-pulse" /><h2 className="text-3xl font-black text-white mb-2">{t('itsYourTurn')}</h2><p className="text-lg text-white font-bold">{t('pleaseGoToStage')}</p><button onClick={() => setShowCallAlert(false)} className="mt-6 bg-white text-red-600 px-8 py-3 rounded-full font-bold text-lg w-full">OK</button></div></div>}
             <button onClick={() => navigate('browse')} className="flex items-center text-gray-400"><ChevronLeft size={20}/> {t('backToEvents')}</button>
             {isEditing ? (
                 <form onSubmit={handleUpdate} className="bg-gray-800 p-4 rounded-xl space-y-3 border border-gray-700">
@@ -333,15 +252,21 @@ const EventDetail = ({ event, user, db, navigate, t, myRegistrations, appId, req
 const CreateEventForm = ({ user, db, navigate, t, fetchEvents, appId }) => {
     const [form, setForm] = useState({ name: '', date: '', region: '', description: '', laneCount: 4, laneCapacity: 50, bannerUrl: '', categoriesStr: 'Standard', paymentInfo: '', paymentQrCodeUrl: '', paymentLink: '' });
     const [isProcessing, setIsProcessing] = useState(false);
+    const [catInput, setCatInput] = useState('');
+    const [categories, setCategories] = useState(['Standard']);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsProcessing(true);
         try {
-            const cats = form.categoriesStr.split(',').map(s => s.trim()).filter(s => s);
-            await addDoc(collection(db, `artifacts/${appId}/public/data/events`), { ...form, categories: cats.length ? cats : ['Standard'], creatorId: user.uid, timestamp: serverTimestamp(), status: 'active', roundsConfig: [{round:2, qualifiers:64}] });
+            const cats = categories.length > 0 ? categories : form.categoriesStr.split(',').map(s => s.trim()).filter(s => s);
+            await addDoc(collection(db, `artifacts/${appId}/public/data/events`), { ...form, categories: cats, creatorId: user.uid, timestamp: serverTimestamp(), status: 'active', roundsConfig: [{round:2, qualifiers:64}] });
             fetchEvents(); navigate('browse');
         } catch(e) { alert(e.message); } finally { setIsProcessing(false); }
     };
+    
+    const addCategory = () => { if(catInput) { setCategories([...categories, catInput]); setCatInput(''); }};
+
     return (
         <div className="p-4 pb-24 text-white">
             <button onClick={() => navigate('browse')} className="text-gray-400 mb-4 flex items-center"><ChevronLeft/> {t('backToHome')}</button>
@@ -352,8 +277,13 @@ const CreateEventForm = ({ user, db, navigate, t, fetchEvents, appId }) => {
                 <input className="w-full p-3 bg-gray-900 rounded text-white" value={form.region} onChange={e => setForm({...form, region: e.target.value})} placeholder={t('eventRegionPh')} required/>
                 <input className="w-full p-3 bg-gray-900 rounded text-white" value={form.bannerUrl} onChange={e => setForm({...form, bannerUrl: e.target.value})} placeholder={t('bannerUrlPh')}/>
                 <input className="w-full p-3 bg-gray-900 rounded text-white" value={form.paymentLink} onChange={e => setForm({...form, paymentLink: e.target.value})} placeholder={t('paymentLinkPh')}/>
-                <input className="w-full p-3 bg-gray-900 rounded text-white" value={form.categoriesStr} onChange={e => setForm({...form, categoriesStr: e.target.value})} placeholder={t('categoriesLabel')}/>
-                <textarea className="w-full p-3 bg-gray-900 rounded text-white" value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder={t('descPh')} rows={3}/>
+                
+                <div>
+                    <label className="text-xs text-gray-400">{t('categoriesLabel')}</label>
+                    <div className="flex gap-2 mb-2"><input className="flex-1 p-2 bg-gray-900 rounded" value={catInput} onChange={e=>setCatInput(e.target.value)} placeholder={t('categoryPh')}/><button type="button" onClick={addCategory} className="bg-indigo-600 p-2 rounded"><Plus/></button></div>
+                    <div className="flex flex-wrap gap-2">{categories.map((c,i)=><span key={i} className="bg-indigo-900 px-2 rounded flex items-center gap-1">{c}<X size={12} onClick={()=>setCategories(categories.filter((_,idx)=>idx!==i))}/></span>)}</div>
+                </div>
+                
                 <button disabled={isProcessing} className="w-full bg-red-600 p-4 rounded-xl font-bold shadow-lg">{isProcessing ? <Loader2 className="animate-spin mx-auto"/> : t('publishBtn')}</button>
             </form>
         </div>
@@ -469,5 +399,140 @@ const RegistrationSuccess = ({ event, navigate, t }) => (
         <button onClick={() => navigate('browse')} className="bg-gray-800 px-8 py-3 rounded-full font-bold">{t('backToHome')}</button>
     </div>
 );
+
+// --- Main App Component ---
+const App = () => {
+    const [user, setUser] = useState(null);
+    const [isAuthReady, setIsAuthReady] = useState(false);
+    const [lang, setLang] = useState('zh-TW');
+    const [currentPage, setCurrentPage] = useState('browse');
+    const [selectedEvent, setSelectedEvent] = useState(null);
+    const [events, setEvents] = useState([]);
+    const [myRegistrations, setMyRegistrations] = useState([]);
+    
+    const [authEmail, setAuthEmail] = useState('');
+    const [authPassword, setAuthPassword] = useState('');
+    const [isRegisteringMode, setIsRegisteringMode] = useState(false);
+    const [systemMessage, setSystemMessage] = useState('');
+    
+    // 🟢 Global Notification State
+    const [globalAlert, setGlobalAlert] = useState(null);
+    const audioRef = useRef(null);
+
+    const t = (key) => translations[lang]?.[key] || translations['en'][key] || key;
+
+    // Global Error Handler
+    useEffect(() => {
+        const handler = (e) => console.error(e);
+        window.addEventListener('error', handler);
+        return () => window.removeEventListener('error', handler);
+    }, []);
+
+    // Auth
+    useEffect(() => {
+        if(!auth) return;
+        return onAuthStateChanged(auth, (u) => {
+            setUser(u);
+            setIsAuthReady(true);
+        });
+    }, []);
+    
+    // 🟢 Global Call Listener (Works on ANY page)
+    useEffect(() => {
+        if (!myRegistrations.length || !events.length) return;
+        const now = Date.now();
+        const activeCalls = myRegistrations.filter(reg => {
+            if (!reg.lastCalledAt || !reg.called) return false;
+            const time = reg.lastCalledAt.toMillis ? reg.lastCalledAt.toMillis() : new Date(reg.lastCalledAt).getTime();
+            return (now - time) < 10000;
+        });
+
+        if (activeCalls.length > 0) {
+            const lastCall = activeCalls[0];
+            const eventName = events.find(e => e.id === lastCall.eventId)?.name || "Event";
+            
+            setGlobalAlert({ title: t('itsYourTurn'), body: t('pleaseGoToStage'), eventName });
+            
+            try { if (navigator.vibrate) navigator.vibrate([500, 200, 500]); } catch(e){}
+            if (audioRef.current) audioRef.current.play().catch(e => console.log("Audio blocked"));
+            if (Notification.permission === 'granted') try { new Notification(`${eventName}: ${t('itsYourTurn')}`); } catch(e){}
+        }
+    }, [myRegistrations, events]);
+
+    const handleAuth = async (e) => {
+        e.preventDefault();
+        try {
+            if(isRegisteringMode) await createUserWithEmailAndPassword(auth, authEmail, authPassword);
+            else await signInWithEmailAndPassword(auth, authEmail, authPassword);
+        } catch(err) { alert(err.message); }
+    };
+
+    const fetchEvents = useCallback(async () => {
+        if(!db) return;
+        const q = query(collection(db, `artifacts/${appId}/public/data/events`));
+        // Real-time Updates
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            setEvents(snapshot.docs.map(d => ({id:d.id, ...d.data(), categories: d.data().categories || ['Standard'], paymentLink: d.data().paymentLink || ''})));
+        });
+        return () => unsubscribe();
+    }, []);
+    
+    useEffect(() => { if(isAuthReady) fetchEvents(); }, [isAuthReady, fetchEvents]);
+    
+    useEffect(() => {
+        if(!db || !user) return;
+        const q = query(collection(db, `artifacts/${appId}/public/data/registrations`), where("userId", "==", user.uid));
+        const unsubscribe = onSnapshot(q, s => setMyRegistrations(s.docs.map(d => ({id:d.id, ...d.data()}))));
+        return () => unsubscribe();
+    }, [user]);
+
+    const navigate = (page, event = null) => { setSelectedEvent(event); setCurrentPage(page); window.scrollTo(0,0); };
+
+    if (!isAuthReady) return <div className="min-h-screen bg-black flex items-center justify-center text-white"><Loader2 className="animate-spin"/></div>;
+
+    if (!user) return <AuthScreen onAuth={handleAuth} isRegistering={isRegisteringMode} setIsRegistering={setIsRegisteringMode} authEmail={authEmail} setAuthEmail={setAuthEmail} authPassword={authPassword} setAuthPassword={setAuthPassword} t={t} systemMessage={systemMessage}/>;
+
+    return (
+        <ErrorBoundary>
+            <div className="min-h-screen bg-black text-sans flex flex-col items-center">
+                <audio ref={audioRef} src="data:audio/mp3;base64,SUQzBAAAAAABAFRYWFgAAAASAAADbWFqb3JfYnJhbmQAbXA0MgBUWFhYAAAAEQAAA21pbm9yX3ZlcnNpb24AMABUWFhYAAAAHAAAA2NvbXBhdGlibGVfYnJhbmRzAGlzb21tcDQyAFRTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAABH//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB///tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB" /> 
+                
+                {/* 🔔 Global Alert Popup */}
+                {globalAlert && (
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 animate-in fade-in">
+                        <div className="bg-red-600 p-8 rounded-3xl text-center border-4 border-white animate-bounce w-4/5 max-w-md">
+                            <BellRing size={64} className="text-white mx-auto mb-4 animate-pulse" />
+                            <h2 className="text-2xl font-black text-yellow-300 mb-2">{globalAlert.eventName}</h2>
+                            <h1 className="text-4xl font-black text-white mb-4">{globalAlert.title}</h1>
+                            <button onClick={() => { setGlobalAlert(null); if(audioRef.current) audioRef.current.pause(); }} className="mt-8 bg-white text-red-600 px-8 py-4 rounded-full font-bold text-xl w-full shadow-lg">OK</button>
+                        </div>
+                    </div>
+                )}
+
+                <div id="app" className="w-full max-w-md min-h-screen flex flex-col bg-gray-900 shadow-xl relative">
+                    <header className="p-4 bg-gray-900 border-b border-gray-800 flex justify-between items-center sticky top-0 z-50">
+                        <h1 className="text-xl font-black text-white flex items-center"><span className="text-red-600 mr-2">⚡</span> {t('appTitle')}</h1>
+                    </header>
+                    
+                    <main className="flex-grow overflow-y-auto">
+                        {currentPage === 'browse' && <EventList events={events} navigate={navigate} t={t} handleLogout={()=>signOut(auth)} lang={lang} setLang={setLang}/>}
+                        {currentPage === 'detail' && <EventDetail event={selectedEvent} user={user} db={db} navigate={navigate} t={t} myRegistrations={myRegistrations} appId={appId}/>}
+                        {currentPage === 'create' && <CreateEventForm user={user} db={db} navigate={navigate} t={t} fetchEvents={fetchEvents} appId={appId}/>}
+                        {currentPage === 'manage' && <EventManager event={selectedEvent} db={db} t={t} navigate={navigate} appId={appId}/>}
+                        {currentPage === 'my_events' && <MyEvents events={events} myRegistrations={myRegistrations} navigate={navigate} t={t}/>}
+                        {currentPage === 'manage_list' && <ManagementList events={events} user={user} navigate={navigate} t={t}/>}
+                        {currentPage === 'registerSuccess' && <RegistrationSuccess event={selectedEvent} navigate={navigate} t={t}/>}
+                    </main>
+
+                    <div className="fixed bottom-0 w-full max-w-md bg-gray-900 border-t border-gray-800 flex justify-around p-2 z-50">
+                        {[{p:'browse',i:Grid},{p:'create',i:PlusCircle},{p:'my_events',i:UserIcon},{p:'manage_list',i:ClipboardList}].map(b=>(
+                            <button key={b.p} onClick={()=>navigate(b.p)} className={`p-2 ${currentPage===b.p?'text-red-500':'text-gray-500'}`}><b.i/></button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </ErrorBoundary>
+    );
+};
 
 export default App;
