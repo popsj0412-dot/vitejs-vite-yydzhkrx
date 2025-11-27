@@ -41,9 +41,9 @@ class ErrorBoundary extends React.Component {
       return (
         <div className="p-8 bg-red-900 text-white min-h-screen flex flex-col items-center justify-center text-center">
           <AlertTriangle size={48} className="mb-4" />
-          <h1 className="text-2xl font-bold mb-2">App Crashed!</h1>
-          <p className="mb-4 text-sm opacity-80">Please screenshot this screen.</p>
-          <button onClick={() => window.location.reload()} className="mt-8 px-6 py-3 bg-white text-red-900 rounded-full font-bold">Reload App</button>
+          <h1 className="text-2xl font-bold mb-2">App Error</h1>
+          <p className="mb-4 text-sm opacity-80">Please reload the application.</p>
+          <button onClick={() => window.location.reload()} className="mt-8 px-6 py-3 bg-white text-red-900 rounded-full font-bold">Reload</button>
         </div>
       );
     }
@@ -69,7 +69,7 @@ const getLaneName = (index) => String.fromCharCode(65 + index);
 const translations = {
     'en': { 
         appTitle: "Dance Platform", 
-        loginTitle: "Login", registerTitle: "Register", emailPh: "Email", passwordPh: "Password (min 6 chars)",
+        loginTitle: "Login", registerTitle: "Register", emailPh: "Email", passwordPh: "Password",
         loginBtn: "Login", registerBtn: "Register", switchToRegister: "No account? Register", switchToLogin: "Have account? Login",
         logout: "Logout", allEvents: "All Events", noEvents: "No events found.", backToEvents: "Back",
         createEventTitle: "Create Event", eventNamePh: "Event Name", eventRegionPh: "Location", bannerUrlPh: "Banner URL",
@@ -81,15 +81,14 @@ const translations = {
         categoryPh: "Category Name", paymentSettingsTitle: "Payment", paymentDescPh: "Info...", paymentQrPh: "QR URL",
         publishBtn: "Publish", editEvent: "Edit", deleteEvent: "Delete", saveChanges: "Save", cancelEdit: "Cancel",
         deleteConfirm: "Delete?", endEventConfirm: "End?", eventEnded: "Ended", tabCheckIn: "CheckIn", tabAssignment: "Draw",
-        tabCalling: "Call", userNotFound: "Account not found! Please register first.", drawWarning: "Re-draw?",
-        drawSuccess: "Done", callSuccess: "Called", callNext: "Next", callAgain: "Call Again", generateDrawBtn: "Generate Draw",
+        tabCalling: "Call", userNotFound: "Account not found!", drawWarning: "Re-draw?", drawSuccess: "Done",
+        callSuccess: "Called", callNext: "Next", callAgain: "Call Again", generateDrawBtn: "Generate Draw",
         openMap: "Map", category: "Category", printList: "Print", printTitle: "List", stageNamePh: "Stage Name",
         selectCategory: "Select Category", notifyHint: "Enable Notify", itsYourTurn: "Your Turn!", pleaseGoToStage: "Go to stage!",
         closeNotification: "OK", qualifyAlertTitle: "Qualified!", qualifyAlertMsg: "Next round!", congrats: "Success",
         successMsg: "Joined", rememberPayment: "Check payment info", backToHome: "Home", addCategoryBtn: "Add",
-        eventFormatLabel: "Main Format", roundConfigTitle: "Rounds", roundConfigDesc: "Qualifiers", roundLabel: "Round",
-        paymentLinkPh: "Payment Link", payNowBtn: "Pay Now",
-        callModeSingle: "Single Mode", callModeAllLanes: "All Lanes",
+        eventFormatLabel: "Format", roundConfigTitle: "Rounds", roundConfigDesc: "Qualifiers", roundLabel: "Round",
+        paymentLinkPh: "Payment Link", payNowBtn: "Pay Now", callModeSingle: "Single Mode", callModeAllLanes: "All Lanes",
     },
     'zh-TW': {
         appTitle: "舞蹈賽事平台",
@@ -112,15 +111,11 @@ const translations = {
         closeNotification: "收到", qualifyAlertTitle: "恭喜晉級！", qualifyAlertMsg: "進入下一輪", congrats: "報名成功",
         successMsg: "已登記", rememberPayment: "請記得繳費報到", backToHome: "回首頁", addCategoryBtn: "加入",
         eventFormatLabel: "賽制", roundConfigTitle: "輪次設定", roundConfigDesc: "晉級人數", roundLabel: "輪次",
-        paymentLinkPh: "支付連結 (Stripe等)", payNowBtn: "前往繳費",
-        callModeSingle: "單人叫號", callModeAllLanes: "賽道齊發",
-    },
-    'zh-CN': { appTitle: "舞蹈赛事平台", userNotFound: "此账号不存在，请先注册！", payNowBtn: "前往缴费", paymentLinkPh: "💳 Stripe / 支付链接 (可选)", callAgain: "再次呼叫" },
-    'ko': { appTitle: "댄스 플랫폼", userNotFound: "계정이 존재하지 않습니다. 먼저 가입해주세요!", payNowBtn: "결제하기", paymentLinkPh: "💳 Stripe / 결제 링크 (선택)", callAgain: "다시 호출" },
-    'ja': { appTitle: "ダンスプラットフォーム", userNotFound: "アカウントが存在しません。登録してください！", payNowBtn: "支払いへ", paymentLinkPh: "💳 Stripe / 支払いリンク (任意)", callAgain: "再呼び出し" }
+        paymentLinkPh: "支付連結 (Stripe等)", payNowBtn: "前往繳費", callModeSingle: "單人叫號", callModeAllLanes: "賽道齊發",
+    }
 };
 
-// --- 子組件 (移至 App 上方以避免 ReferenceError) ---
+// --- 子組件定義 ---
 
 const AuthScreen = ({ onAuth, isRegistering, setIsRegistering, authEmail, setAuthEmail, authPassword, setAuthPassword, t, systemMessage }) => (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4 text-white">
@@ -142,7 +137,7 @@ const EventList = ({ events, navigate, t, handleLogout, lang, setLang }) => {
     const featured = sorted.find(e => new Date(e.date) >= new Date()) || sorted[sorted.length - 1];
     return (
         <div className="p-4 pb-24 space-y-4 text-white">
-            <div className="flex justify-between items-center"><h2 className="text-xl font-bold">{t('allEvents')}</h2><div className="flex gap-2 items-center"><select value={lang} onChange={e => setLang(e.target.value)} className="bg-gray-800 text-xs p-1 rounded"><option value="zh-TW">繁體</option><option value="en">EN</option></select><button onClick={handleLogout}><LogOut size={16}/></button></div></div>
+            <div className="flex justify-between items-center"><h2 className="text-xl font-bold">{t('allEvents')}</h2><div className="flex gap-2 items-center"><select value={lang} onChange={e => setLang(e.target.value)} className="bg-gray-800 text-xs p-1 rounded"><option value="en">EN</option><option value="zh-TW">繁體</option></select><button onClick={handleLogout}><LogOut size={16}/></button></div></div>
             {featured && <div onClick={() => navigate('detail', featured)} className="relative w-full h-48 bg-gray-800 rounded-3xl overflow-hidden border border-gray-700 group cursor-pointer">{featured.bannerUrl ? <img src={featured.bannerUrl} className="absolute inset-0 w-full h-full object-cover opacity-60" /> : <div className="absolute inset-0 bg-gradient-to-br from-purple-900 to-black opacity-90"/>}<div className="absolute inset-0 flex flex-col justify-end p-4 bg-gradient-to-t from-black/90 via-transparent"><span className="bg-red-600 text-[10px] font-black px-2 py-1 rounded w-fit mb-1">HOT</span><h3 className="text-2xl font-black shadow-black drop-shadow-md">{featured.name}</h3><p className="text-xs text-gray-300 flex items-center"><MapPin size={12} className="mr-1"/>{featured.region}</p></div></div>}
             <div className="space-y-3">{sorted.map(e => <div key={e.id} onClick={() => navigate('detail', e)} className="bg-gray-800 p-4 rounded-2xl border border-gray-700 flex gap-3 cursor-pointer overflow-hidden relative">{e.bannerUrl && <div className="absolute inset-0 opacity-20"><img src={e.bannerUrl} className="w-full h-full object-cover"/></div>}<div className="relative z-10"><h3 className="font-bold text-lg">{e.name}</h3><div className="flex gap-1 flex-wrap mt-1">{e.categories?.map(c => <span key={c} className="text-[10px] bg-indigo-900 text-indigo-200 px-1 rounded border border-indigo-700">{c}</span>)}</div><div className="text-sm text-gray-400 mt-2 flex items-center"><Calendar size={14} className="mr-1"/>{formatDateOnly(e.date)}</div></div></div>)}</div>
         </div>
@@ -158,25 +153,6 @@ const EventDetail = ({ event, user, db, navigate, t, myRegistrations, appId }) =
     const [stageName, setStageName] = useState('');
     const [category, setCategory] = useState(event.categories?.[0] || 'Standard');
     
-    // 手機通知防護機制
-    const [showCallAlert, setShowCallAlert] = useState(false);
-    const audioRef = useRef(null);
-
-    useEffect(() => { if ('wakeLock' in navigator) navigator.wakeLock.request('screen').catch(()=>{}); }, []);
-    
-    useEffect(() => {
-        if (reg?.called) {
-            const calledTime = reg.lastCalledAt?.toMillis ? reg.lastCalledAt.toMillis() : new Date(reg.lastCalledAt).getTime();
-            // 10秒內的呼叫才觸發通知
-            if (Date.now() - calledTime < 10000) {
-                setShowCallAlert(true);
-                try { if (navigator.vibrate) navigator.vibrate([500, 200, 500]); } catch(e){}
-                if (audioRef.current) audioRef.current.play().catch(e => console.log("Audio blocked"));
-                if (Notification.permission === 'granted') try { new Notification(t('itsYourTurn'), { body: t('pleaseGoToStage') }); } catch(e){}
-            }
-        }
-    }, [reg?.lastCalledAt]);
-
     const handleRegister = async () => {
         if (!stageName.trim()) return alert("Please enter Stage Name");
         try {
@@ -184,7 +160,6 @@ const EventDetail = ({ event, user, db, navigate, t, myRegistrations, appId }) =
             const snap = await getDocs(q);
             if (!snap.empty) throw new Error("Already registered");
             await addDoc(collection(db, `artifacts/${appId}/public/data/registrations`), { eventId: event.id, userId: user.uid, stageName, category, registrationTime: serverTimestamp(), checkedIn: false, paid: false, isAssigned: false, called: false, lastCalledAt: null });
-            Notification.requestPermission();
             navigate('registerSuccess', { ...event, temp: true });
         } catch (e) { alert(e.message); }
     };
@@ -205,8 +180,6 @@ const EventDetail = ({ event, user, db, navigate, t, myRegistrations, appId }) =
 
     return (
         <div className="p-4 pb-24 space-y-4 text-white">
-            <audio ref={audioRef} src="data:audio/mp3;base64,SUQzBAAAAAABAFRYWFgAAAASAAADbWFqb3JfYnJhbmQAbXA0MgBUWFhYAAAAEQAAA21pbm9yX3ZlcnNpb24AMABUWFhYAAAAHAAAA2NvbXBhdGlibGVfYnJhbmRzAGlzb21tcDQyAFRTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAABH//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB///tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB" /> 
-            {showCallAlert && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 animate-in fade-in"><div className="bg-red-600 p-8 rounded-3xl text-center border-4 border-white animate-bounce"><BellRing size={64} className="text-white mx-auto mb-4 animate-pulse" /><h2 className="text-3xl font-black text-white mb-2">{t('itsYourTurn')}</h2><p className="text-lg text-white font-bold">{t('pleaseGoToStage')}</p><button onClick={() => setShowCallAlert(false)} className="mt-6 bg-white text-red-600 px-8 py-3 rounded-full font-bold text-lg w-full">OK</button></div></div>}
             <button onClick={() => navigate('browse')} className="flex items-center text-gray-400"><ChevronLeft size={20}/> {t('backToEvents')}</button>
             {isEditing ? (
                 <form onSubmit={handleUpdate} className="bg-gray-800 p-4 rounded-xl space-y-3 border border-gray-700">
@@ -252,21 +225,19 @@ const EventDetail = ({ event, user, db, navigate, t, myRegistrations, appId }) =
 const CreateEventForm = ({ user, db, navigate, t, fetchEvents, appId }) => {
     const [form, setForm] = useState({ name: '', date: '', region: '', description: '', laneCount: 4, laneCapacity: 50, bannerUrl: '', categoriesStr: 'Standard', paymentInfo: '', paymentQrCodeUrl: '', paymentLink: '' });
     const [isProcessing, setIsProcessing] = useState(false);
-    const [catInput, setCatInput] = useState('');
-    const [categories, setCategories] = useState(['Standard']);
-
+    
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsProcessing(true);
         try {
-            const cats = categories.length > 0 ? categories : form.categoriesStr.split(',').map(s => s.trim()).filter(s => s);
-            await addDoc(collection(db, `artifacts/${appId}/public/data/events`), { ...form, categories: cats, creatorId: user.uid, timestamp: serverTimestamp(), status: 'active', roundsConfig: [{round:2, qualifiers:64}] });
+            const cats = form.categoriesStr.split(',').map(s => s.trim()).filter(s => s);
+            await addDoc(collection(db, `artifacts/${appId}/public/data/events`), {
+                ...form, categories: cats.length ? cats : ['Standard'], creatorId: user.uid, 
+                timestamp: serverTimestamp(), status: 'active', roundsConfig: [{round:2, qualifiers:64}]
+            });
             fetchEvents(); navigate('browse');
         } catch(e) { alert(e.message); } finally { setIsProcessing(false); }
     };
-    
-    const addCategory = () => { if(catInput) { setCategories([...categories, catInput]); setCatInput(''); }};
-
     return (
         <div className="p-4 pb-24 text-white">
             <button onClick={() => navigate('browse')} className="text-gray-400 mb-4 flex items-center"><ChevronLeft/> {t('backToHome')}</button>
@@ -277,13 +248,7 @@ const CreateEventForm = ({ user, db, navigate, t, fetchEvents, appId }) => {
                 <input className="w-full p-3 bg-gray-900 rounded text-white" value={form.region} onChange={e => setForm({...form, region: e.target.value})} placeholder={t('eventRegionPh')} required/>
                 <input className="w-full p-3 bg-gray-900 rounded text-white" value={form.bannerUrl} onChange={e => setForm({...form, bannerUrl: e.target.value})} placeholder={t('bannerUrlPh')}/>
                 <input className="w-full p-3 bg-gray-900 rounded text-white" value={form.paymentLink} onChange={e => setForm({...form, paymentLink: e.target.value})} placeholder={t('paymentLinkPh')}/>
-                
-                <div>
-                    <label className="text-xs text-gray-400">{t('categoriesLabel')}</label>
-                    <div className="flex gap-2 mb-2"><input className="flex-1 p-2 bg-gray-900 rounded" value={catInput} onChange={e=>setCatInput(e.target.value)} placeholder={t('categoryPh')}/><button type="button" onClick={addCategory} className="bg-indigo-600 p-2 rounded"><Plus/></button></div>
-                    <div className="flex flex-wrap gap-2">{categories.map((c,i)=><span key={i} className="bg-indigo-900 px-2 rounded flex items-center gap-1">{c}<X size={12} onClick={()=>setCategories(categories.filter((_,idx)=>idx!==i))}/></span>)}</div>
-                </div>
-                
+                <input className="w-full p-3 bg-gray-900 rounded text-white" value={form.categoriesStr} onChange={e => setForm({...form, categoriesStr: e.target.value})} placeholder={t('categoriesLabel')}/>
                 <button disabled={isProcessing} className="w-full bg-red-600 p-4 rounded-xl font-bold shadow-lg">{isProcessing ? <Loader2 className="animate-spin mx-auto"/> : t('publishBtn')}</button>
             </form>
         </div>
@@ -400,6 +365,47 @@ const RegistrationSuccess = ({ event, navigate, t }) => (
     </div>
 );
 
+const MyEvents = ({ events, myRegistrations, navigate, t }) => {
+    const list = events.filter(e => myRegistrations.some(r => r.eventId === e.id));
+    return (
+        <div className="p-4 pb-24 text-white">
+            <h2 className="text-xl font-bold mb-4">{t('myEventsTitle')}</h2>
+            {list.length === 0 ? (
+                <div className="text-center text-gray-500 py-12 border border-dashed border-gray-700 rounded-xl">{t('noJoinedEvents')}</div>
+            ) : (
+                list.map(e => { 
+                    const r = myRegistrations.find(reg=>reg.eventId===e.id); 
+                    return (
+                        <div key={e.id} onClick={() => navigate('detail', e)} className="bg-gray-800 p-4 mb-3 rounded-xl border border-gray-700 cursor-pointer">
+                            {e.name} <br/>
+                            <span className="text-yellow-400 text-sm">{r?.laneAssignment ? `${r.laneAssignment}-${r.queueNumber}` : t('waitingForDraw')}</span>
+                        </div> 
+                    );
+                })
+            )}
+        </div>
+    );
+};
+
+const ManagementList = ({ events, user, navigate, t }) => {
+    if (!user) return null;
+    const list = events.filter(e => e.creatorId === user?.uid);
+    return (
+        <div className="p-4 pb-24 text-white">
+            <h2 className="text-xl font-bold mb-4">{t('manageListTitle')}</h2>
+            {list.length === 0 ? (
+                <div className="text-center text-gray-500 py-12 border border-dashed border-gray-700 rounded-xl">{t('noHostedEvents')}</div>
+            ) : (
+                list.map(e => (
+                    <div key={e.id} onClick={() => navigate('manage', e)} className="bg-gray-800 p-4 mb-3 rounded-xl border border-gray-700 cursor-pointer flex justify-between items-center">
+                        <span>{e.name}</span><Settings size={16}/>
+                    </div>
+                ))
+            )}
+        </div>
+    );
+};
+
 // --- Main App Component ---
 const App = () => {
     const [user, setUser] = useState(null);
@@ -453,8 +459,19 @@ const App = () => {
             
             setGlobalAlert({ title: t('itsYourTurn'), body: t('pleaseGoToStage'), eventName });
             
-            try { if (navigator.vibrate) navigator.vibrate([500, 200, 500]); } catch(e){}
-            if (audioRef.current) audioRef.current.play().catch(e => console.log("Audio blocked"));
+            // 移除震動以防 iPhone 崩潰
+            // try { if (navigator.vibrate) navigator.vibrate([500, 200, 500]); } catch(e){}
+            
+            // 安全播放音效
+            if (audioRef.current) {
+                const playPromise = audioRef.current.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.log("Audio autoplay prevented");
+                    });
+                }
+            }
+
             if (Notification.permission === 'granted') try { new Notification(`${eventName}: ${t('itsYourTurn')}`); } catch(e){}
         }
     }, [myRegistrations, events]);
@@ -497,11 +514,11 @@ const App = () => {
             <div className="min-h-screen bg-black text-sans flex flex-col items-center">
                 <audio ref={audioRef} src="data:audio/mp3;base64,SUQzBAAAAAABAFRYWFgAAAASAAADbWFqb3JfYnJhbmQAbXA0MgBUWFhYAAAAEQAAA21pbm9yX3ZlcnNpb24AMABUWFhYAAAAHAAAA2NvbXBhdGlibGVfYnJhbmRzAGlzb21tcDQyAFRTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAABH//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB///tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB//tQxAAAAAAA0gAAAAABAAABAAAAAAAAAAAB" /> 
                 
-                {/* 🔔 Global Alert Popup */}
+                {/* 🔔 Global Alert Popup (Static, no animation) */}
                 {globalAlert && (
-                    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 animate-in fade-in">
-                        <div className="bg-red-600 p-8 rounded-3xl text-center border-4 border-white animate-bounce w-4/5 max-w-md">
-                            <BellRing size={64} className="text-white mx-auto mb-4 animate-pulse" />
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95">
+                        <div className="bg-red-600 p-8 rounded-3xl text-center border-4 border-white w-4/5 max-w-md">
+                            <BellRing size={64} className="text-white mx-auto mb-4" />
                             <h2 className="text-2xl font-black text-yellow-300 mb-2">{globalAlert.eventName}</h2>
                             <h1 className="text-4xl font-black text-white mb-4">{globalAlert.title}</h1>
                             <button onClick={() => { setGlobalAlert(null); if(audioRef.current) audioRef.current.pause(); }} className="mt-8 bg-white text-red-600 px-8 py-4 rounded-full font-bold text-xl w-full shadow-lg">OK</button>
